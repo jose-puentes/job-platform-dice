@@ -1,0 +1,15 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "shared-queue"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "celery>=5.4.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/shared_queue"]
+

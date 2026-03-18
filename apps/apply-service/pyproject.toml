@@ -1,0 +1,25 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "apply-service"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.34.0",
+  "sqlalchemy>=2.0.0",
+  "psycopg[binary]>=3.2.0",
+  "alembic>=1.14.0",
+  "shared-config",
+  "shared-db",
+  "shared-events",
+  "shared-queue",
+  "shared-types",
+  "shared-utils",
+  "shared-http",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]

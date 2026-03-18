@@ -1,0 +1,20 @@
+[build-system]
+requires = ["hatchling>=1.25.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "scraper-service"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi>=0.115.0",
+  "uvicorn[standard]>=0.34.0",
+  "httpx>=0.28.0",
+  "shared-config",
+  "shared-types",
+  "shared-utils",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+

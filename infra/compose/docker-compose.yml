@@ -1,0 +1,169 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+  api-gateway:
+    build:
+      context: ../..
+      dockerfile: infra/docker/python-service.Dockerfile
+      args:
+        SERVICE_PATH: apps/api-gateway
+    env_file:
+      - ../../.env
+    environment:
+      SERVICE_NAME: api-gateway
+      SERVICE_PORT: 8000
+    ports:
+      - "${API_GATEWAY_PORT:-8000}:8000"
+    depends_on:
+      - redis
+
+  job-service:
+    build:
+      context: ../..
+      dockerfile: infra/docker/python-service.Dockerfile
+      args:
+        SERVICE_PATH: apps/job-service
+    env_file:
+      - ../../.env
+    environment:
+      SERVICE_NAME: job-service
+      SERVICE_PORT: 8001
+    ports:
+      - "${JOB_SERVICE_PORT:-8001}:8001"
+    depends_on:
+      - redis
+
+  scraper-service:
+    build:
+      context: ../..
+      dockerfile: infra/docker/python-service.Dockerfile
+      args:
+        SERVICE_PATH: apps/scraper-service
+    env_file:
+      - ../../.env
+    environment:
+      SERVICE_NAME: scraper-service
+      SERVICE_PORT: 8002
+    ports:
+      - "${SCRAPER_SERVICE_PORT:-8002}:8002"
+    depends_on:
+      - redis
+
+  orchestrator-service:
+    build:
+      context: ../..
+      dockerfile: infra/docker/python-service.Dockerfile
+      args:
+        SERVICE_PATH: apps/orchestrator-service
+    env_file:
+      - ../../.env
+    environment:
+      SERVICE_NAME: orchestrator-service
+      SERVICE_PORT: 8003
+    ports:
+      - "${ORCHESTRATOR_SERVICE_PORT:-8003}:8003"
+    depends_on:
+      - redis
+
+  worker-service:
+    build:
+      context: ../..
+      dockerfile: infra/docker/python-service.Dockerfile
+      args:
+        SERVICE_PATH: apps/worker-service
+    env_file:
+      - ../../.env
+    environment:
+      SERVICE_NAME: worker-service
+      SERVICE_PORT: 8004
+    ports:
+      - "${WORKER_SERVICE_PORT:-8004}:8004"
+    depends_on:
+      - redis
+
+  worker-runner:
+    build:
+      context: ../..
+      dockerfile: infra/docker/python-service.Dockerfile
+      args:
+        SERVICE_PATH: apps/worker-service
+    env_file:
+      - ../../.env
+    environment:
+      SERVICE_NAME: worker-service
+      SERVICE_PORT: 8004
+    command: ["celery", "-A", "app.tasks.celery_app", "worker", "--loglevel=INFO", "--concurrency=4"]
+    depends_on:
+      - redis
+
+  ai-service:
+    build:
+      context: ../..
+      dockerfile: infra/docker/python-service.Dockerfile
+      args:
+        SERVICE_PATH: apps/ai-service
+    env_file:
+      - ../../.env
+    environment:
+      SERVICE_NAME: ai-service
+      SERVICE_PORT: 8005
+    ports:
+      - "${AI_SERVICE_PORT:-8005}:8005"
+    volumes:
+      - ../../data/documents:/data/documents
+    depends_on:
+      - redis
+
+  apply-service:
+    build:
+      context: ../..
+      dockerfile: infra/docker/python-service.Dockerfile
+      args:
+        SERVICE_PATH: apps/apply-service
+    env_file:
+      - ../../.env
+    environment:
+      SERVICE_NAME: apply-service
+      SERVICE_PORT: 8006
+    ports:
+      - "${APPLY_SERVICE_PORT:-8006}:8006"
+    depends_on:
+      - redis
+
+  notification-service:
+    build:
+      context: ../..
+      dockerfile: infra/docker/python-service.Dockerfile
+      args:
+        SERVICE_PATH: apps/notification-service
+    env_file:
+      - ../../.env
+    environment:
+      SERVICE_NAME: notification-service
+      SERVICE_PORT: 8007
+    ports:
+      - "${NOTIFICATION_SERVICE_PORT:-8007}:8007"
+    depends_on:
+      - redis
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/web.Dockerfile
+    env_file:
+      - ../../.env
+    environment:
+      PORT: 3000
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:${API_GATEWAY_PORT:-8000}/api/v1
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    depends_on:
+      - api-gateway
+
+volumes:
+  redis-data:
