@@ -5,7 +5,15 @@ from sqlalchemy.orm import Session
 
 from app.models import EmploymentType, Job, WorkMode
 from app.repositories.job_repository import JobRepository
-from shared_types import JobDetail, JobIngestRequest, JobIngestResponse, JobSearchParams, JobSummary, PaginatedJobsResponse
+from shared_types import (
+    JobDetail,
+    JobFilterMetadata,
+    JobIngestRequest,
+    JobIngestResponse,
+    JobSearchParams,
+    JobSummary,
+    PaginatedJobsResponse,
+)
 
 
 class JobCatalogService:
@@ -77,6 +85,9 @@ class JobCatalogService:
         if not job:
             raise HTTPException(status_code=404, detail="Job not found")
         return self._to_detail(job)
+
+    def get_filter_metadata(self) -> JobFilterMetadata:
+        return self.repository.get_filter_metadata()
 
     @staticmethod
     def _update_job(job: Job, company_id: UUID, source_id: UUID, payload) -> None:

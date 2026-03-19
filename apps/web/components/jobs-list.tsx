@@ -48,9 +48,7 @@ export function JobsList({
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between gap-3 rounded-[24px] border border-slate-200 bg-slate-50 p-4">
-        <div className="text-sm text-slate-600">
-          {selected.length} selected
-        </div>
+        <div className="text-sm text-slate-600">{selected.length} selected</div>
         <button
           onClick={runBatchApply}
           disabled={selected.length === 0 || isPending}
@@ -89,7 +87,7 @@ export function JobsList({
                   <div>
                     <h3 className="text-xl font-semibold text-slate-900">{job.title}</h3>
                     <p className="mt-1 text-sm text-slate-600">
-                      {job.company} · {job.location ?? "Location not specified"} · {job.source}
+                      {job.company} - {job.location ?? "Location not specified"} - {job.source}
                     </p>
                   </div>
                   <div className="flex gap-2 text-xs font-medium">

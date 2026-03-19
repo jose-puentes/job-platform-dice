@@ -16,14 +16,19 @@ from shared_types.documents import (
 )
 from shared_types.health import HealthResponse
 from shared_types.ingestion import JobIngestRequest, JobIngestResponse, NormalizedJobPayload
-from shared_types.jobs import JobDetail, JobSearchParams, JobSummary, PaginatedJobsResponse
+from shared_types.jobs import JobDetail, JobFilterMetadata, JobSearchParams, JobSummary, PaginatedJobsResponse
 from shared_types.scrape import (
     CreateScrapeRunRequest,
     ScrapeRunListResponse,
     ScrapeRunResponse,
     ScrapeTaskPayload,
 )
-from shared_types.scrape_internal import ScrapeTaskStatusUpdateRequest
+from shared_types.scrape_internal import (
+    AdapterDiagnosticArtifact,
+    RawScrapePayloadArtifact,
+    ScrapeTaskArtifactsRequest,
+    ScrapeTaskStatusUpdateRequest,
+)
 
 __all__ = [
     "CreateScrapeRunRequest",
@@ -37,6 +42,7 @@ __all__ = [
     "GenerationRunResponse",
     "HealthResponse",
     "JobDetail",
+    "JobFilterMetadata",
     "JobIngestRequest",
     "JobIngestResponse",
     "JobSearchParams",
@@ -47,8 +53,11 @@ __all__ = [
     "ApplicationResponse",
     "ApplyAttemptPayload",
     "ApplyRunResponse",
+    "AdapterDiagnosticArtifact",
+    "RawScrapePayloadArtifact",
     "ScrapeRunListResponse",
     "ScrapeRunResponse",
     "ScrapeTaskPayload",
+    "ScrapeTaskArtifactsRequest",
     "ScrapeTaskStatusUpdateRequest",
 ]

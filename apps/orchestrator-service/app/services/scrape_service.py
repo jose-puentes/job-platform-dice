@@ -16,32 +16,34 @@ class ScrapeOrchestratorService:
         self.repository = ScrapeRepository(db)
 
     def create_run(self, request: CreateScrapeRunRequest) -> ScrapeRunResponse:
+        queries = self._expand_queries(request.query)
         run = ScrapeRun(
             source=request.source,
             query=request.query,
             location=request.location,
             status=ScrapeRunStatus.RUNNING,
-            total_tasks=request.max_pages,
+            total_tasks=request.max_pages * len(queries),
             started_at=datetime.now(UTC),
         )
         self.repository.add_run(run)
 
         tasks: list[ScrapeTask] = []
-        for page_number in range(1, request.max_pages + 1):
-            task = ScrapeTask(
-                scrape_run_id=run.id,
-                task_type=ScrapeTaskType.SEARCH_PAGE,
-                board=request.source,
-                page_number=page_number,
-                status=ScrapeTaskStatus.PENDING,
-                payload={
-                    "source": request.source,
-                    "query": request.query,
-                    "location": request.location,
-                    "page_number": page_number,
-                },
-            )
-            tasks.append(task)
+        for query in queries:
+            for page_number in range(1, request.max_pages + 1):
+                task = ScrapeTask(
+                    scrape_run_id=run.id,
+                    task_type=ScrapeTaskType.SEARCH_PAGE,
+                    board=request.source,
+                    page_number=page_number,
+                    status=ScrapeTaskStatus.PENDING,
+                    payload={
+                        "source": request.source,
+                        "query": query,
+                        "location": request.location,
+                        "page_number": page_number,
+                    },
+                )
+                tasks.append(task)
 
         self.repository.add_tasks(tasks)
         self.db.commit()
@@ -54,7 +56,7 @@ class ScrapeOrchestratorService:
                         scrape_run_id=run.id,
                         scrape_task_id=task.id,
                         source=request.source,
-                        query=request.query,
+                        query=task.payload.get("query"),
                         location=request.location,
                         page_number=task.page_number or 1,
                     ).model_dump(mode="json"),
@@ -93,4 +95,13 @@ class ScrapeOrchestratorService:
             created_at=run.created_at,
             updated_at=run.updated_at,
         )
+
+    @staticmethod
+    def _expand_queries(query: str | None) -> list[str]:
+        if not query:
+            return [""]
+
+        parts = [item.strip() for item in query.replace("\n", ",").replace(";", ",").split(",")]
+        normalized = [item for item in parts if item]
+        return normalized or [query.strip()]
 

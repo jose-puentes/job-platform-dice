@@ -1,10 +1,12 @@
 from app.services.adapters.demo import DemoBoardAdapter
+from app.services.adapters.dice import DiceAdapter
 from app.services.adapters.greenhouse import GreenhouseAdapter
 from app.services.board_base import BaseBoardAdapter
 
 
 ADAPTERS: dict[str, BaseBoardAdapter] = {
     "demo": DemoBoardAdapter(),
+    "dice": DiceAdapter(),
     "greenhouse": GreenhouseAdapter(),
 }
 

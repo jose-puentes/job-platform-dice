@@ -10,7 +10,7 @@ router = APIRouter(prefix="/internal/scrape", tags=["scrape"])
 @router.post("/execute", response_model=ScrapeExecutionResponse)
 async def execute_scrape(request: ScrapeExecutionRequest) -> ScrapeExecutionResponse:
     adapter = get_adapter(request.source)
-    jobs = await adapter.scrape(
+    jobs, raw_payloads, diagnostics = await adapter.scrape_with_artifacts(
         ScrapeContext(
             source=request.source,
             query=request.query,
@@ -20,5 +20,6 @@ async def execute_scrape(request: ScrapeExecutionRequest) -> ScrapeExecutionResp
     )
     return ScrapeExecutionResponse(
         jobs=jobs,
-        diagnostics=[{"adapter": adapter.name, "status": "ok"}],
+        diagnostics=diagnostics,
+        raw_payloads=raw_payloads,
     )

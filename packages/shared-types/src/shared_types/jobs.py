@@ -12,6 +12,9 @@ class JobSearchParams(BaseModel):
     location: str | None = None
     work_mode: str | None = None
     employment_type: str | None = None
+    posted_within_days: int | None = Field(default=None, ge=1, le=365)
+    salary_min: Decimal | None = Field(default=None, ge=0)
+    salary_max: Decimal | None = Field(default=None, ge=0)
     page: int = Field(default=1, ge=1)
     page_size: int = Field(default=20, ge=1, le=100)
     sort: str = "posted_at_desc"
@@ -46,4 +49,12 @@ class PaginatedJobsResponse(BaseModel):
     page: int
     page_size: int
     total: int
+
+
+class JobFilterMetadata(BaseModel):
+    sources: list[str]
+    companies: list[str]
+    locations: list[str]
+    work_modes: list[str]
+    employment_types: list[str]
 

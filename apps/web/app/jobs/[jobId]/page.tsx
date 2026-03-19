@@ -37,8 +37,8 @@ export default async function JobDetailPage({
         <div className="text-sm uppercase tracking-[0.3em] text-teal-300">Job Detail</div>
         <h1 className="mt-3 text-3xl font-semibold">{job.title}</h1>
         <p className="mt-3 max-w-3xl text-slate-300">
-          {job.company} · {job.location ?? "Location not specified"} · {job.source} ·{" "}
-          {job.work_mode} · {job.employment_type}
+          {job.company} - {job.location ?? "Location not specified"} - {job.source} -{" "}
+          {job.work_mode} - {job.employment_type}
         </p>
       </div>
       <div className="grid gap-4 lg:grid-cols-[1fr,360px]">
@@ -69,7 +69,7 @@ export default async function JobDetailPage({
             {documents.items.length === 0 && <div>No generated documents yet.</div>}
             {documents.items.map((document) => (
               <div key={document.id} className="rounded-2xl bg-white px-3 py-2">
-                {document.document_type} · {document.generation_status}
+                {document.document_type} - {document.generation_status}
               </div>
             ))}
           </div>

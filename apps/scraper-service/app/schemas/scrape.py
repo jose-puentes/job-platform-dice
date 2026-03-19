@@ -1,6 +1,11 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
-from shared_types import NormalizedJobPayload, ScrapeTaskPayload
+from shared_types import (
+    AdapterDiagnosticArtifact,
+    NormalizedJobPayload,
+    RawScrapePayloadArtifact,
+    ScrapeTaskPayload,
+)
 
 
 class ScrapeExecutionRequest(ScrapeTaskPayload):
@@ -9,5 +14,6 @@ class ScrapeExecutionRequest(ScrapeTaskPayload):
 
 class ScrapeExecutionResponse(BaseModel):
     jobs: list[NormalizedJobPayload]
-    diagnostics: list[dict[str, str]] = []
+    diagnostics: list[AdapterDiagnosticArtifact] = Field(default_factory=list)
+    raw_payloads: list[RawScrapePayloadArtifact] = Field(default_factory=list)
 

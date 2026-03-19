@@ -6,9 +6,9 @@ import { apiBaseUrl } from "@/lib/api";
 
 
 export async function createScrapeRun(formData: FormData) {
-  const source = String(formData.get("source") || "greenhouse");
+  const source = String(formData.get("source") || "dice");
   const query = String(formData.get("query") || "");
-  const location = String(formData.get("location") || "");
+  const location = String(formData.get("location") || "Remote");
   const maxPages = Number(formData.get("max_pages") || 1);
 
   await fetch(`${apiBaseUrl}/scrape-runs`, {

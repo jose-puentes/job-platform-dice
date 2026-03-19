@@ -2,6 +2,7 @@ from shared_http import build_async_client
 from shared_types import (
     JobIngestRequest,
     JobIngestResponse,
+    ScrapeTaskArtifactsRequest,
     ScrapeTaskPayload,
     ScrapeTaskStatusUpdateRequest,
 )
@@ -35,6 +36,14 @@ async def execute_scrape_flow(payload: ScrapeTaskPayload) -> JobIngestResponse:
         scrape_response.raise_for_status()
         scrape_data = scrape_response.json()
 
+    await _store_task_artifacts(
+        ScrapeTaskArtifactsRequest(
+            scrape_task_id=payload.scrape_task_id,
+            raw_payloads=scrape_data.get("raw_payloads", []),
+            diagnostics=scrape_data.get("diagnostics", []),
+        )
+    )
+
     async with build_async_client(settings.job_service_url) as job_client:
         ingest_response = await job_client.post(
             "/internal/jobs/ingest",
@@ -55,3 +64,12 @@ async def execute_scrape_flow(payload: ScrapeTaskPayload) -> JobIngestResponse:
         )
     )
     return result
+
+
+async def _store_task_artifacts(request: ScrapeTaskArtifactsRequest) -> None:
+    async with build_async_client(settings.orchestrator_service_url) as orchestrator_client:
+        response = await orchestrator_client.post(
+            "/internal/scrape-tasks/artifacts",
+            json=request.model_dump(mode="json"),
+        )
+        response.raise_for_status()

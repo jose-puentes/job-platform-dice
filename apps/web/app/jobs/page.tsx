@@ -1,7 +1,7 @@
 import Link from "next/link";
 
-import { apiFetch } from "@/lib/api";
 import { JobsList } from "@/components/jobs-list";
+import { apiFetch } from "@/lib/api";
 
 type JobItem = {
   id: string;
@@ -20,6 +20,26 @@ type JobsResponse = {
   page_size: number;
 };
 
+type JobFiltersResponse = {
+  sources: string[];
+  companies: string[];
+  locations: string[];
+  work_modes: string[];
+  employment_types: string[];
+};
+
+function buildQuery(params: Record<string, string>) {
+  const query = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) {
+      query.set(key, value);
+    }
+  });
+
+  return query;
+}
+
 export default async function JobsPage({
   searchParams,
 }: {
@@ -32,23 +52,58 @@ export default async function JobsPage({
   const location = typeof params.location === "string" ? params.location : "";
   const workMode = typeof params.work_mode === "string" ? params.work_mode : "";
   const employmentType = typeof params.employment_type === "string" ? params.employment_type : "";
+  const postedWithinDays =
+    typeof params.posted_within_days === "string" ? params.posted_within_days : "";
+  const salaryMin = typeof params.salary_min === "string" ? params.salary_min : "";
+  const salaryMax = typeof params.salary_max === "string" ? params.salary_max : "";
+  const sort = typeof params.sort === "string" ? params.sort : "posted_at_desc";
   const page = typeof params.page === "string" ? params.page : "1";
+  const filtersFallback: JobFiltersResponse = {
+    sources: [],
+    companies: [],
+    locations: [],
+    work_modes: ["remote", "hybrid", "onsite", "unknown"],
+    employment_types: ["full_time", "part_time", "contract", "internship", "temporary", "unknown"],
+  };
+
   let data: JobsResponse | null = null;
+  let filters = filtersFallback;
   let error = false;
 
   try {
-    const query = new URLSearchParams();
-    if (q) query.set("q", q);
-    if (source) query.set("source", source);
-    if (company) query.set("company", company);
-    if (location) query.set("location", location);
-    if (workMode) query.set("work_mode", workMode);
-    if (employmentType) query.set("employment_type", employmentType);
-    if (page) query.set("page", page);
-    data = await apiFetch<JobsResponse>(`/jobs?${query.toString()}`);
+    const query = buildQuery({
+      q,
+      source,
+      company,
+      location,
+      work_mode: workMode,
+      employment_type: employmentType,
+      posted_within_days: postedWithinDays,
+      salary_min: salaryMin,
+      salary_max: salaryMax,
+      sort,
+      page,
+    });
+    [data, filters] = await Promise.all([
+      apiFetch<JobsResponse>(`/jobs?${query.toString()}`),
+      apiFetch<JobFiltersResponse>("/jobs/filters").catch(() => filtersFallback),
+    ]);
   } catch {
     error = true;
   }
+
+  const baseQuery = {
+    ...(q ? { q } : {}),
+    ...(source ? { source } : {}),
+    ...(company ? { company } : {}),
+    ...(location ? { location } : {}),
+    ...(workMode ? { work_mode: workMode } : {}),
+    ...(employmentType ? { employment_type: employmentType } : {}),
+    ...(postedWithinDays ? { posted_within_days: postedWithinDays } : {}),
+    ...(salaryMin ? { salary_min: salaryMin } : {}),
+    ...(salaryMax ? { salary_max: salaryMax } : {}),
+    ...(sort ? { sort } : {}),
+  };
 
   return (
     <div className="space-y-6">
@@ -60,7 +115,7 @@ export default async function JobsPage({
           <h1 className="mt-2 text-3xl font-semibold text-slate-900">Normalized Job Catalog</h1>
         </div>
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
-          Search, filter, paginate, and batch apply will connect here through `api-gateway`.
+          Search, filter, paginate, and batch apply now flow through the gateway-backed catalog.
         </div>
       </div>
       <div className="grid gap-4 lg:grid-cols-[320px,1fr]">
@@ -73,33 +128,53 @@ export default async function JobsPage({
               placeholder="Keyword"
               className="w-full rounded-2xl border border-slate-200 bg-white p-3"
             />
-            <input
+            <select
               name="source"
               defaultValue={source}
-              placeholder="Source"
               className="w-full rounded-2xl border border-slate-200 bg-white p-3"
-            />
+            >
+              <option value="">All sources</option>
+              {filters.sources.map((item) => (
+                <option key={item} value={item}>
+                  {item}
+                </option>
+              ))}
+            </select>
             <input
               name="company"
               defaultValue={company}
               placeholder="Company"
+              list="job-company-options"
               className="w-full rounded-2xl border border-slate-200 bg-white p-3"
             />
+            <datalist id="job-company-options">
+              {filters.companies.map((item) => (
+                <option key={item} value={item} />
+              ))}
+            </datalist>
             <input
               name="location"
               defaultValue={location}
               placeholder="Location"
+              list="job-location-options"
               className="w-full rounded-2xl border border-slate-200 bg-white p-3"
             />
+            <datalist id="job-location-options">
+              {filters.locations.map((item) => (
+                <option key={item} value={item} />
+              ))}
+            </datalist>
             <select
               name="work_mode"
               defaultValue={workMode}
               className="w-full rounded-2xl border border-slate-200 bg-white p-3"
             >
               <option value="">Any work mode</option>
-              <option value="remote">Remote</option>
-              <option value="hybrid">Hybrid</option>
-              <option value="onsite">Onsite</option>
+              {filters.work_modes.map((item) => (
+                <option key={item} value={item}>
+                  {item.replaceAll("_", " ")}
+                </option>
+              ))}
             </select>
             <select
               name="employment_type"
@@ -107,11 +182,54 @@ export default async function JobsPage({
               className="w-full rounded-2xl border border-slate-200 bg-white p-3"
             >
               <option value="">Any employment type</option>
-              <option value="full_time">Full time</option>
-              <option value="part_time">Part time</option>
-              <option value="contract">Contract</option>
-              <option value="internship">Internship</option>
-              <option value="temporary">Temporary</option>
+              {filters.employment_types.map((item) => (
+                <option key={item} value={item}>
+                  {item.replaceAll("_", " ")}
+                </option>
+              ))}
+            </select>
+            <select
+              name="posted_within_days"
+              defaultValue={postedWithinDays}
+              className="w-full rounded-2xl border border-slate-200 bg-white p-3"
+            >
+              <option value="">Any posted date</option>
+              <option value="1">Last 24 hours</option>
+              <option value="7">Last 7 days</option>
+              <option value="14">Last 14 days</option>
+              <option value="30">Last 30 days</option>
+            </select>
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                name="salary_min"
+                type="number"
+                min="0"
+                step="1000"
+                defaultValue={salaryMin}
+                placeholder="Min salary"
+                className="w-full rounded-2xl border border-slate-200 bg-white p-3"
+              />
+              <input
+                name="salary_max"
+                type="number"
+                min="0"
+                step="1000"
+                defaultValue={salaryMax}
+                placeholder="Max salary"
+                className="w-full rounded-2xl border border-slate-200 bg-white p-3"
+              />
+            </div>
+            <select
+              name="sort"
+              defaultValue={sort}
+              className="w-full rounded-2xl border border-slate-200 bg-white p-3"
+            >
+              <option value="posted_at_desc">Newest first</option>
+              <option value="posted_at_asc">Oldest first</option>
+              <option value="salary_desc">Highest salary</option>
+              <option value="salary_asc">Lowest salary</option>
+              <option value="company_asc">Company A-Z</option>
+              <option value="title_asc">Title A-Z</option>
             </select>
             <button className="w-full rounded-2xl bg-slate-950 px-4 py-3 font-medium text-white">
               Apply Filters
@@ -129,18 +247,11 @@ export default async function JobsPage({
           )}
           {!error && data && (
             <div className="flex items-center justify-between rounded-[24px] border border-slate-200 bg-white px-5 py-4 text-sm text-slate-600">
-              <div>
-                Page {data.page} · {data.total} total jobs
-              </div>
+              <div>Page {data.page} - {data.total} total jobs</div>
               <div className="flex gap-3">
                 <Link
-                  href={`/jobs?${new URLSearchParams({
-                    ...(q ? { q } : {}),
-                    ...(source ? { source } : {}),
-                    ...(company ? { company } : {}),
-                    ...(location ? { location } : {}),
-                    ...(workMode ? { work_mode: workMode } : {}),
-                    ...(employmentType ? { employment_type: employmentType } : {}),
+                  href={`/jobs?${buildQuery({
+                    ...baseQuery,
                     page: String(Math.max(1, data.page - 1)),
                   }).toString()}`}
                   className="rounded-xl border border-slate-200 px-3 py-2"
@@ -148,13 +259,8 @@ export default async function JobsPage({
                   Previous
                 </Link>
                 <Link
-                  href={`/jobs?${new URLSearchParams({
-                    ...(q ? { q } : {}),
-                    ...(source ? { source } : {}),
-                    ...(company ? { company } : {}),
-                    ...(location ? { location } : {}),
-                    ...(workMode ? { work_mode: workMode } : {}),
-                    ...(employmentType ? { employment_type: employmentType } : {}),
+                  href={`/jobs?${buildQuery({
+                    ...baseQuery,
                     page: String(data.page + 1),
                   }).toString()}`}
                   className="rounded-xl border border-slate-200 px-3 py-2"

@@ -1,11 +1,12 @@
 import hashlib
+from datetime import UTC, datetime, timedelta
 from typing import cast
 
-from sqlalchemy import Select, func, or_, select
+from sqlalchemy import Select, distinct, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.models import Company, EmploymentType, Job, JobSource, WorkMode
-from shared_types import JobSearchParams, NormalizedJobPayload
+from shared_types import JobFilterMetadata, JobSearchParams, NormalizedJobPayload
 
 
 class JobRepository:
@@ -78,31 +79,53 @@ class JobRepository:
     def list_jobs(self, params: JobSearchParams) -> tuple[list[Job], int]:
         stmt: Select[tuple[Job]] = select(Job).options(joinedload(Job.company), joinedload(Job.source))
         count_stmt = select(func.count(Job.id))
+        stmt = stmt.join(Company, Job.company_id == Company.id).join(JobSource, Job.source_id == JobSource.id)
+        count_stmt = count_stmt.join(Company, Job.company_id == Company.id).join(JobSource, Job.source_id == JobSource.id)
 
         filters = [Job.is_active.is_(True)]
         if params.q:
             like = f"%{params.q}%"
-            filters.append(or_(Job.title.ilike(like), Job.description.ilike(like)))
+            filters.append(
+                or_(
+                    Job.title.ilike(like),
+                    Job.description.ilike(like),
+                    Job.short_description.ilike(like),
+                    Company.name.ilike(like),
+                )
+            )
         if params.company:
             filters.append(Company.normalized_name == self._normalize_text(params.company))
-            stmt = stmt.join(Company)
-            count_stmt = count_stmt.join(Company)
         if params.source:
             filters.append(JobSource.source_name == params.source)
-            stmt = stmt.join(JobSource)
-            count_stmt = count_stmt.join(JobSource)
         if params.location:
             filters.append(Job.location.ilike(f"%{params.location}%"))
         if params.work_mode:
             filters.append(Job.work_mode == WorkMode(params.work_mode))
         if params.employment_type:
             filters.append(Job.employment_type == EmploymentType(params.employment_type))
+        if params.posted_within_days:
+            filters.append(Job.posted_at >= datetime.now(UTC) - timedelta(days=params.posted_within_days))
+
+        effective_salary_min = func.coalesce(Job.salary_min, Job.salary_max)
+        effective_salary_max = func.coalesce(Job.salary_max, Job.salary_min)
+        if params.salary_min is not None:
+            filters.append(effective_salary_max >= params.salary_min)
+        if params.salary_max is not None:
+            filters.append(effective_salary_min <= params.salary_max)
 
         stmt = stmt.where(*filters)
         count_stmt = count_stmt.where(*filters)
 
         if params.sort == "posted_at_asc":
             stmt = stmt.order_by(Job.posted_at.asc().nullslast(), Job.id.asc())
+        elif params.sort == "salary_desc":
+            stmt = stmt.order_by(effective_salary_max.desc().nullslast(), Job.posted_at.desc().nullslast(), Job.id.desc())
+        elif params.sort == "salary_asc":
+            stmt = stmt.order_by(effective_salary_min.asc().nullslast(), Job.posted_at.desc().nullslast(), Job.id.desc())
+        elif params.sort == "company_asc":
+            stmt = stmt.order_by(Company.name.asc(), Job.posted_at.desc().nullslast(), Job.id.desc())
+        elif params.sort == "title_asc":
+            stmt = stmt.order_by(Job.title.asc(), Job.posted_at.desc().nullslast(), Job.id.desc())
         else:
             stmt = stmt.order_by(Job.posted_at.desc().nullslast(), Job.id.desc())
 
@@ -117,6 +140,45 @@ class JobRepository:
             .options(joinedload(Job.company), joinedload(Job.source))
             .where(Job.id == job_id)
         ).scalar_one_or_none()
+
+    def get_filter_metadata(self) -> JobFilterMetadata:
+        active_jobs = Job.is_active.is_(True)
+        sources = self.db.execute(
+            select(distinct(JobSource.source_name))
+            .join(Job, Job.source_id == JobSource.id)
+            .where(active_jobs)
+            .order_by(JobSource.source_name.asc())
+        ).scalars().all()
+        companies = self.db.execute(
+            select(distinct(Company.name))
+            .join(Job, Job.company_id == Company.id)
+            .where(active_jobs)
+            .order_by(Company.name.asc())
+        ).scalars().all()
+        locations = self.db.execute(
+            select(distinct(Job.location))
+            .where(active_jobs, Job.location.is_not(None))
+            .order_by(Job.location.asc())
+            .limit(100)
+        ).scalars().all()
+        work_modes = self.db.execute(
+            select(distinct(Job.work_mode))
+            .where(active_jobs)
+            .order_by(Job.work_mode.asc())
+        ).scalars().all()
+        employment_types = self.db.execute(
+            select(distinct(Job.employment_type))
+            .where(active_jobs)
+            .order_by(Job.employment_type.asc())
+        ).scalars().all()
+
+        return JobFilterMetadata(
+            sources=list(sources),
+            companies=list(companies),
+            locations=[location for location in locations if location],
+            work_modes=[work_mode.value for work_mode in work_modes],
+            employment_types=[employment_type.value for employment_type in employment_types],
+        )
 
     @staticmethod
     def _normalize_text(value: str) -> str:
