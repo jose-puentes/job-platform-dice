@@ -2,8 +2,8 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import ENUM, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared_db import Base
@@ -82,10 +82,12 @@ class Job(Base):
     state: Mapped[str | None] = mapped_column(String(128))
     city: Mapped[str | None] = mapped_column(String(128))
     work_mode: Mapped[WorkMode] = mapped_column(
-        Enum(WorkMode, name="work_mode_enum", schema="jobs"), default=WorkMode.UNKNOWN, nullable=False
+        ENUM(WorkMode, name="work_mode_enum", schema="jobs", create_type=False),
+        default=WorkMode.UNKNOWN,
+        nullable=False,
     )
     employment_type: Mapped[EmploymentType] = mapped_column(
-        Enum(EmploymentType, name="employment_type_enum", schema="jobs"),
+        ENUM(EmploymentType, name="employment_type_enum", schema="jobs", create_type=False),
         default=EmploymentType.UNKNOWN,
         nullable=False,
     )

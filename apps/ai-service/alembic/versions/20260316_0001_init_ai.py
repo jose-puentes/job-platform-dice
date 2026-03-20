@@ -20,13 +20,13 @@ def upgrade() -> None:
     op.execute("CREATE SCHEMA IF NOT EXISTS ai")
 
     template_type_enum = postgresql.ENUM(
-        "resume", "cover_letter", name="template_type_enum", schema="ai"
+        "resume", "cover_letter", name="template_type_enum", schema="ai", create_type=False
     )
     document_type_enum = postgresql.ENUM(
-        "resume", "cover_letter", name="document_type_enum", schema="ai"
+        "resume", "cover_letter", name="document_type_enum", schema="ai", create_type=False
     )
     generation_status_enum = postgresql.ENUM(
-        "pending", "running", "completed", "failed", name="generation_status_enum", schema="ai"
+        "pending", "running", "completed", "failed", name="generation_status_enum", schema="ai", create_type=False
     )
     for enum_type in (template_type_enum, document_type_enum, generation_status_enum):
         enum_type.create(op.get_bind(), checkfirst=True)

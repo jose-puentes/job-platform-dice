@@ -86,7 +86,7 @@ class ScrapeRunStatusService:
                 adapter_name=diagnostic.adapter_name,
                 severity=diagnostic.severity,
                 message=diagnostic.message,
-                metadata=diagnostic.metadata,
+                metadata_json=diagnostic.metadata,
             )
             for diagnostic in request.diagnostics
         ]

@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +20,18 @@ class ServiceSettings(BaseSettings):
     openai_model: str = Field(default="gpt-5", alias="OPENAI_MODEL")
     document_storage_path: str = Field(default="/data/documents", alias="DOCUMENT_STORAGE_PATH")
     worker_concurrency: int = Field(default=4, alias="WORKER_CONCURRENCY")
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, value: str | list[str]) -> list[str]:
+        if isinstance(value, list):
+            return value
+        if isinstance(value, str):
+            raw = value.strip()
+            if raw.startswith("["):
+                return value
+            return [item.strip() for item in raw.split(",") if item.strip()]
+        return ["http://localhost:3000"]
 
     model_config = SettingsConfigDict(
         env_file=".env",

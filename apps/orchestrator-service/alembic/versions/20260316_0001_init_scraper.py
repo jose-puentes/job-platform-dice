@@ -21,18 +21,18 @@ def upgrade() -> None:
 
     run_status_enum = postgresql.ENUM(
         "pending", "running", "partial", "completed", "failed",
-        name="scrape_run_status_enum", schema="scraper"
+        name="scrape_run_status_enum", schema="scraper", create_type=False
     )
     task_type_enum = postgresql.ENUM(
-        "search_page", "job_detail", name="scrape_task_type_enum", schema="scraper"
+        "search_page", "job_detail", name="scrape_task_type_enum", schema="scraper", create_type=False
     )
     task_status_enum = postgresql.ENUM(
         "pending", "running", "completed", "failed",
-        name="scrape_task_status_enum", schema="scraper"
+        name="scrape_task_status_enum", schema="scraper", create_type=False
     )
     payload_type_enum = postgresql.ENUM(
         "listing_json", "detail_json", "listing_html", "detail_html",
-        name="payload_type_enum", schema="scraper"
+        name="payload_type_enum", schema="scraper", create_type=False
     )
     for enum_type in (run_status_enum, task_type_enum, task_status_enum, payload_type_enum):
         enum_type.create(op.get_bind(), checkfirst=True)

@@ -21,7 +21,7 @@ def upgrade() -> None:
     op.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
 
     work_mode_enum = postgresql.ENUM(
-        "remote", "hybrid", "onsite", "unknown", name="work_mode_enum", schema="jobs"
+        "remote", "hybrid", "onsite", "unknown", name="work_mode_enum", schema="jobs", create_type=False
     )
     employment_type_enum = postgresql.ENUM(
         "full_time",
@@ -32,6 +32,7 @@ def upgrade() -> None:
         "unknown",
         name="employment_type_enum",
         schema="jobs",
+        create_type=False,
     )
     work_mode_enum.create(op.get_bind(), checkfirst=True)
     employment_type_enum.create(op.get_bind(), checkfirst=True)

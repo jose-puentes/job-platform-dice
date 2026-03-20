@@ -2,8 +2,8 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, Index, Integer, Text, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import Boolean, DateTime, Index, Integer, Text, func
+from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from shared_db import Base
@@ -32,7 +32,8 @@ class PromptTemplate(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     template_type: Mapped[TemplateType] = mapped_column(
-        Enum(TemplateType, name="template_type_enum", schema="ai"), nullable=False
+        ENUM(TemplateType, name="template_type_enum", schema="ai", create_type=False),
+        nullable=False,
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -51,10 +52,11 @@ class GenerationRun(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     document_type: Mapped[DocumentType] = mapped_column(
-        Enum(DocumentType, name="document_type_enum", schema="ai"), nullable=False
+        ENUM(DocumentType, name="document_type_enum", schema="ai", create_type=False),
+        nullable=False,
     )
     status: Mapped[GenerationStatus] = mapped_column(
-        Enum(GenerationStatus, name="generation_status_enum", schema="ai"),
+        ENUM(GenerationStatus, name="generation_status_enum", schema="ai", create_type=False),
         default=GenerationStatus.PENDING,
         nullable=False,
     )
@@ -62,7 +64,7 @@ class GenerationRun(Base):
     model_name: Mapped[str] = mapped_column(Text, nullable=False)
     requested_by: Mapped[str | None] = mapped_column(Text)
     error_message: Mapped[str | None] = mapped_column(Text)
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -79,15 +81,17 @@ class GeneratedDocument(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     document_type: Mapped[DocumentType] = mapped_column(
-        Enum(DocumentType, name="document_type_enum", schema="ai"), nullable=False
+        ENUM(DocumentType, name="document_type_enum", schema="ai", create_type=False),
+        nullable=False,
     )
     prompt_template_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     generation_status: Mapped[GenerationStatus] = mapped_column(
-        Enum(GenerationStatus, name="generation_status_enum", schema="ai"), nullable=False
+        ENUM(GenerationStatus, name="generation_status_enum", schema="ai", create_type=False),
+        nullable=False,
     )
     file_path: Mapped[str] = mapped_column(Text, nullable=False)
     model_name: Mapped[str] = mapped_column(Text, nullable=False)
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

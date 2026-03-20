@@ -19,22 +19,22 @@ depends_on = None
 def upgrade() -> None:
     op.execute("CREATE SCHEMA IF NOT EXISTS apply")
 
-    apply_mode_enum = postgresql.ENUM("single", "batch", name="apply_mode_enum", schema="apply")
+    apply_mode_enum = postgresql.ENUM("single", "batch", name="apply_mode_enum", schema="apply", create_type=False)
     apply_run_status_enum = postgresql.ENUM(
         "pending", "running", "partial", "completed", "failed",
-        name="apply_run_status_enum", schema="apply"
+        name="apply_run_status_enum", schema="apply", create_type=False
     )
     application_status_enum = postgresql.ENUM(
         "pending", "processing", "applied", "manual_assist", "failed",
-        name="application_status_enum", schema="apply"
+        name="application_status_enum", schema="apply", create_type=False
     )
     apply_strategy_enum = postgresql.ENUM(
         "easy_apply", "external_redirect", "manual_assist",
-        name="apply_strategy_enum", schema="apply"
+        name="apply_strategy_enum", schema="apply", create_type=False
     )
     apply_attempt_status_enum = postgresql.ENUM(
         "pending", "running", "completed", "failed",
-        name="apply_attempt_status_enum", schema="apply"
+        name="apply_attempt_status_enum", schema="apply", create_type=False
     )
     for enum_type in (
         apply_mode_enum,

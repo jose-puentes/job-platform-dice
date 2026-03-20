@@ -87,7 +87,7 @@ class DocumentRepository:
             generation_status=status,
             file_path=file_path,
             model_name=model_name,
-            metadata=metadata,
+            metadata_json=metadata,
         )
         self.db.add(document)
         self.db.flush()

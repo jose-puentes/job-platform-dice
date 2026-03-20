@@ -132,7 +132,7 @@ class ApplicationService:
                     application_id=application.id,
                     event_type="apply_attempt_completed",
                     message=message,
-                    metadata={"strategy": strategy.value},
+                    metadata_json={"strategy": strategy.value},
                 )
             )
 

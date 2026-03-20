@@ -2,8 +2,8 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, Text, UniqueConstraint, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, Text, UniqueConstraint, func
+from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared_db import Base
@@ -50,10 +50,11 @@ class ApplyRun(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     triggered_by: Mapped[str] = mapped_column(Text, nullable=False)
     mode: Mapped[ApplyMode] = mapped_column(
-        Enum(ApplyMode, name="apply_mode_enum", schema="apply"), nullable=False
+        ENUM(ApplyMode, name="apply_mode_enum", schema="apply", create_type=False),
+        nullable=False,
     )
     status: Mapped[ApplyRunStatus] = mapped_column(
-        Enum(ApplyRunStatus, name="apply_run_status_enum", schema="apply"),
+        ENUM(ApplyRunStatus, name="apply_run_status_enum", schema="apply", create_type=False),
         default=ApplyRunStatus.PENDING,
         nullable=False,
     )
@@ -77,10 +78,12 @@ class Application(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     application_status: Mapped[ApplicationStatus] = mapped_column(
-        Enum(ApplicationStatus, name="application_status_enum", schema="apply"), nullable=False
+        ENUM(ApplicationStatus, name="application_status_enum", schema="apply", create_type=False),
+        nullable=False,
     )
     apply_strategy: Mapped[ApplyStrategy] = mapped_column(
-        Enum(ApplyStrategy, name="apply_strategy_enum", schema="apply"), nullable=False
+        ENUM(ApplyStrategy, name="apply_strategy_enum", schema="apply", create_type=False),
+        nullable=False,
     )
     resume_document_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
     cover_letter_document_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
@@ -104,7 +107,7 @@ class ApplicationEvent(Base):
     )
     event_type: Mapped[str] = mapped_column(Text, nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     application: Mapped[Application] = relationship(back_populates="events")
@@ -123,15 +126,16 @@ class ApplyAttempt(Base):
     )
     job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     strategy: Mapped[ApplyStrategy] = mapped_column(
-        Enum(ApplyStrategy, name="apply_strategy_enum", schema="apply"), nullable=False
+        ENUM(ApplyStrategy, name="apply_strategy_enum", schema="apply", create_type=False),
+        nullable=False,
     )
     status: Mapped[ApplyAttemptStatus] = mapped_column(
-        Enum(ApplyAttemptStatus, name="apply_attempt_status_enum", schema="apply"),
+        ENUM(ApplyAttemptStatus, name="apply_attempt_status_enum", schema="apply", create_type=False),
         default=ApplyAttemptStatus.PENDING,
         nullable=False,
     )
     error_message: Mapped[str | None] = mapped_column(Text)
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

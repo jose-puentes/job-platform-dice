@@ -2,8 +2,8 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, Text, func
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, Text, func
+from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from shared_db import Base
@@ -45,7 +45,7 @@ class ScrapeRun(Base):
     query: Mapped[str | None] = mapped_column(Text)
     location: Mapped[str | None] = mapped_column(Text)
     status: Mapped[ScrapeRunStatus] = mapped_column(
-        Enum(ScrapeRunStatus, name="scrape_run_status_enum", schema="scraper"),
+        ENUM(ScrapeRunStatus, name="scrape_run_status_enum", schema="scraper", create_type=False),
         default=ScrapeRunStatus.PENDING,
         nullable=False,
     )
@@ -79,12 +79,13 @@ class ScrapeTask(Base):
         UUID(as_uuid=True), ForeignKey("scraper.scrape_runs.id"), nullable=False
     )
     task_type: Mapped[ScrapeTaskType] = mapped_column(
-        Enum(ScrapeTaskType, name="scrape_task_type_enum", schema="scraper"), nullable=False
+        ENUM(ScrapeTaskType, name="scrape_task_type_enum", schema="scraper", create_type=False),
+        nullable=False,
     )
     board: Mapped[str] = mapped_column(Text, nullable=False)
     page_number: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[ScrapeTaskStatus] = mapped_column(
-        Enum(ScrapeTaskStatus, name="scrape_task_status_enum", schema="scraper"),
+        ENUM(ScrapeTaskStatus, name="scrape_task_status_enum", schema="scraper", create_type=False),
         default=ScrapeTaskStatus.PENDING,
         nullable=False,
     )
@@ -113,7 +114,8 @@ class RawScrapePayload(Base):
     source: Mapped[str] = mapped_column(Text, nullable=False)
     source_url: Mapped[str] = mapped_column(Text, nullable=False)
     payload_type: Mapped[PayloadType] = mapped_column(
-        Enum(PayloadType, name="payload_type_enum", schema="scraper"), nullable=False
+        ENUM(PayloadType, name="payload_type_enum", schema="scraper", create_type=False),
+        nullable=False,
     )
     raw_json: Mapped[dict | None] = mapped_column(JSONB)
     raw_html: Mapped[str | None] = mapped_column(Text)
@@ -133,6 +135,6 @@ class AdapterDiagnostic(Base):
     adapter_name: Mapped[str] = mapped_column(Text, nullable=False)
     severity: Mapped[str] = mapped_column(Text, nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
-    metadata: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
