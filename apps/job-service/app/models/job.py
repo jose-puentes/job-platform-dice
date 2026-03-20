@@ -25,6 +25,10 @@ class EmploymentType(str, enum.Enum):
     UNKNOWN = "unknown"
 
 
+def enum_values(enum_cls: type[enum.Enum]) -> list[str]:
+    return [member.value for member in enum_cls]
+
+
 class Company(Base):
     __tablename__ = "companies"
     __table_args__ = {"schema": "jobs"}
@@ -82,12 +86,24 @@ class Job(Base):
     state: Mapped[str | None] = mapped_column(String(128))
     city: Mapped[str | None] = mapped_column(String(128))
     work_mode: Mapped[WorkMode] = mapped_column(
-        ENUM(WorkMode, name="work_mode_enum", schema="jobs", create_type=False),
+        ENUM(
+            WorkMode,
+            name="work_mode_enum",
+            schema="jobs",
+            create_type=False,
+            values_callable=enum_values,
+        ),
         default=WorkMode.UNKNOWN,
         nullable=False,
     )
     employment_type: Mapped[EmploymentType] = mapped_column(
-        ENUM(EmploymentType, name="employment_type_enum", schema="jobs", create_type=False),
+        ENUM(
+            EmploymentType,
+            name="employment_type_enum",
+            schema="jobs",
+            create_type=False,
+            values_callable=enum_values,
+        ),
         default=EmploymentType.UNKNOWN,
         nullable=False,
     )

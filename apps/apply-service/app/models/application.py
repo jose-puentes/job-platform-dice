@@ -43,6 +43,10 @@ class ApplyAttemptStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+def enum_values(enum_cls: type[enum.Enum]) -> list[str]:
+    return [member.value for member in enum_cls]
+
+
 class ApplyRun(Base):
     __tablename__ = "apply_runs"
     __table_args__ = {"schema": "apply"}
@@ -50,11 +54,23 @@ class ApplyRun(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     triggered_by: Mapped[str] = mapped_column(Text, nullable=False)
     mode: Mapped[ApplyMode] = mapped_column(
-        ENUM(ApplyMode, name="apply_mode_enum", schema="apply", create_type=False),
+        ENUM(
+            ApplyMode,
+            name="apply_mode_enum",
+            schema="apply",
+            create_type=False,
+            values_callable=enum_values,
+        ),
         nullable=False,
     )
     status: Mapped[ApplyRunStatus] = mapped_column(
-        ENUM(ApplyRunStatus, name="apply_run_status_enum", schema="apply", create_type=False),
+        ENUM(
+            ApplyRunStatus,
+            name="apply_run_status_enum",
+            schema="apply",
+            create_type=False,
+            values_callable=enum_values,
+        ),
         default=ApplyRunStatus.PENDING,
         nullable=False,
     )
@@ -78,11 +94,23 @@ class Application(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     application_status: Mapped[ApplicationStatus] = mapped_column(
-        ENUM(ApplicationStatus, name="application_status_enum", schema="apply", create_type=False),
+        ENUM(
+            ApplicationStatus,
+            name="application_status_enum",
+            schema="apply",
+            create_type=False,
+            values_callable=enum_values,
+        ),
         nullable=False,
     )
     apply_strategy: Mapped[ApplyStrategy] = mapped_column(
-        ENUM(ApplyStrategy, name="apply_strategy_enum", schema="apply", create_type=False),
+        ENUM(
+            ApplyStrategy,
+            name="apply_strategy_enum",
+            schema="apply",
+            create_type=False,
+            values_callable=enum_values,
+        ),
         nullable=False,
     )
     resume_document_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
@@ -126,11 +154,23 @@ class ApplyAttempt(Base):
     )
     job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     strategy: Mapped[ApplyStrategy] = mapped_column(
-        ENUM(ApplyStrategy, name="apply_strategy_enum", schema="apply", create_type=False),
+        ENUM(
+            ApplyStrategy,
+            name="apply_strategy_enum",
+            schema="apply",
+            create_type=False,
+            values_callable=enum_values,
+        ),
         nullable=False,
     )
     status: Mapped[ApplyAttemptStatus] = mapped_column(
-        ENUM(ApplyAttemptStatus, name="apply_attempt_status_enum", schema="apply", create_type=False),
+        ENUM(
+            ApplyAttemptStatus,
+            name="apply_attempt_status_enum",
+            schema="apply",
+            create_type=False,
+            values_callable=enum_values,
+        ),
         default=ApplyAttemptStatus.PENDING,
         nullable=False,
     )

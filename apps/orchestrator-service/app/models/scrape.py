@@ -36,6 +36,10 @@ class PayloadType(str, enum.Enum):
     DETAIL_HTML = "detail_html"
 
 
+def enum_values(enum_cls: type[enum.Enum]) -> list[str]:
+    return [member.value for member in enum_cls]
+
+
 class ScrapeRun(Base):
     __tablename__ = "scrape_runs"
     __table_args__ = {"schema": "scraper"}
@@ -45,7 +49,13 @@ class ScrapeRun(Base):
     query: Mapped[str | None] = mapped_column(Text)
     location: Mapped[str | None] = mapped_column(Text)
     status: Mapped[ScrapeRunStatus] = mapped_column(
-        ENUM(ScrapeRunStatus, name="scrape_run_status_enum", schema="scraper", create_type=False),
+        ENUM(
+            ScrapeRunStatus,
+            name="scrape_run_status_enum",
+            schema="scraper",
+            create_type=False,
+            values_callable=enum_values,
+        ),
         default=ScrapeRunStatus.PENDING,
         nullable=False,
     )
@@ -79,13 +89,25 @@ class ScrapeTask(Base):
         UUID(as_uuid=True), ForeignKey("scraper.scrape_runs.id"), nullable=False
     )
     task_type: Mapped[ScrapeTaskType] = mapped_column(
-        ENUM(ScrapeTaskType, name="scrape_task_type_enum", schema="scraper", create_type=False),
+        ENUM(
+            ScrapeTaskType,
+            name="scrape_task_type_enum",
+            schema="scraper",
+            create_type=False,
+            values_callable=enum_values,
+        ),
         nullable=False,
     )
     board: Mapped[str] = mapped_column(Text, nullable=False)
     page_number: Mapped[int | None] = mapped_column(Integer)
     status: Mapped[ScrapeTaskStatus] = mapped_column(
-        ENUM(ScrapeTaskStatus, name="scrape_task_status_enum", schema="scraper", create_type=False),
+        ENUM(
+            ScrapeTaskStatus,
+            name="scrape_task_status_enum",
+            schema="scraper",
+            create_type=False,
+            values_callable=enum_values,
+        ),
         default=ScrapeTaskStatus.PENDING,
         nullable=False,
     )
@@ -114,7 +136,13 @@ class RawScrapePayload(Base):
     source: Mapped[str] = mapped_column(Text, nullable=False)
     source_url: Mapped[str] = mapped_column(Text, nullable=False)
     payload_type: Mapped[PayloadType] = mapped_column(
-        ENUM(PayloadType, name="payload_type_enum", schema="scraper", create_type=False),
+        ENUM(
+            PayloadType,
+            name="payload_type_enum",
+            schema="scraper",
+            create_type=False,
+            values_callable=enum_values,
+        ),
         nullable=False,
     )
     raw_json: Mapped[dict | None] = mapped_column(JSONB)

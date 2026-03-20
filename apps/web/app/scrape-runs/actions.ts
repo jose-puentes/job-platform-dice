@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { apiBaseUrl } from "@/lib/api";
+import { getApiBaseUrl } from "@/lib/api";
 
 
 export async function createScrapeRun(formData: FormData) {
@@ -11,7 +11,7 @@ export async function createScrapeRun(formData: FormData) {
   const location = String(formData.get("location") || "Remote");
   const maxPages = Number(formData.get("max_pages") || 1);
 
-  await fetch(`${apiBaseUrl}/scrape-runs`, {
+  await fetch(`${getApiBaseUrl()}/scrape-runs`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

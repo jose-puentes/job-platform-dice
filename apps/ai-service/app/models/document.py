@@ -26,13 +26,23 @@ class GenerationStatus(str, enum.Enum):
     FAILED = "failed"
 
 
+def enum_values(enum_cls: type[enum.Enum]) -> list[str]:
+    return [member.value for member in enum_cls]
+
+
 class PromptTemplate(Base):
     __tablename__ = "prompt_templates"
     __table_args__ = {"schema": "ai"}
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     template_type: Mapped[TemplateType] = mapped_column(
-        ENUM(TemplateType, name="template_type_enum", schema="ai", create_type=False),
+        ENUM(
+            TemplateType,
+            name="template_type_enum",
+            schema="ai",
+            create_type=False,
+            values_callable=enum_values,
+        ),
         nullable=False,
     )
     name: Mapped[str] = mapped_column(Text, nullable=False)
@@ -52,11 +62,23 @@ class GenerationRun(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     document_type: Mapped[DocumentType] = mapped_column(
-        ENUM(DocumentType, name="document_type_enum", schema="ai", create_type=False),
+        ENUM(
+            DocumentType,
+            name="document_type_enum",
+            schema="ai",
+            create_type=False,
+            values_callable=enum_values,
+        ),
         nullable=False,
     )
     status: Mapped[GenerationStatus] = mapped_column(
-        ENUM(GenerationStatus, name="generation_status_enum", schema="ai", create_type=False),
+        ENUM(
+            GenerationStatus,
+            name="generation_status_enum",
+            schema="ai",
+            create_type=False,
+            values_callable=enum_values,
+        ),
         default=GenerationStatus.PENDING,
         nullable=False,
     )
@@ -81,12 +103,24 @@ class GeneratedDocument(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     job_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
     document_type: Mapped[DocumentType] = mapped_column(
-        ENUM(DocumentType, name="document_type_enum", schema="ai", create_type=False),
+        ENUM(
+            DocumentType,
+            name="document_type_enum",
+            schema="ai",
+            create_type=False,
+            values_callable=enum_values,
+        ),
         nullable=False,
     )
     prompt_template_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False)
     generation_status: Mapped[GenerationStatus] = mapped_column(
-        ENUM(GenerationStatus, name="generation_status_enum", schema="ai", create_type=False),
+        ENUM(
+            GenerationStatus,
+            name="generation_status_enum",
+            schema="ai",
+            create_type=False,
+            values_callable=enum_values,
+        ),
         nullable=False,
     )
     file_path: Mapped[str] = mapped_column(Text, nullable=False)
