@@ -20,7 +20,10 @@ DEFAULT_HEADERS = {
     ),
     "Accept-Language": "en-US,en;q=0.9",
 }
-JOB_DETAIL_LINK_RE = re.compile(r"""href=["'](?P<href>/job-detail/[^"'?#]+)""", re.IGNORECASE)
+JOB_DETAIL_LINK_RE = re.compile(
+    r"""(?:href=["'](?P<href>/job-detail/[^"'?#]+)|(?P<details>https?:(?:\\/\\/|//)www\.dice\.com(?:\\/|/)job-detail(?:\\/|/)[^"'\\?#]+))""",
+    re.IGNORECASE,
+)
 POSTED_DATE_RE = re.compile(r"Date Posted:\s*(\d{4}-\d{2}-\d{2})", re.IGNORECASE)
 SALARY_RANGE_RE = re.compile(
     r"(?P<currency>USD|\$)\s*"
@@ -59,7 +62,11 @@ def _extract_job_links(search_html: str) -> list[str]:
     seen: set[str] = set()
     links: list[str] = []
     for match in JOB_DETAIL_LINK_RE.finditer(search_html):
-        href = html.unescape(match.group("href"))
+        href = match.group("href") or match.group("details")
+        if not href:
+            continue
+        href = href.replace("\\/", "/")
+        href = html.unescape(href)
         absolute_url = urljoin(DICE_BASE_URL, href)
         if absolute_url not in seen:
             seen.add(absolute_url)

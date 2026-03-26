@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.queue import celery_app
 from app.models import ScrapeRun, ScrapeRunStatus, ScrapeTask, ScrapeTaskStatus, ScrapeTaskType
 from app.repositories.scrape_repository import ScrapeRepository
+from app.services.run_event_service import event_service
 from shared_types import CreateScrapeRunRequest, ScrapeRunListResponse, ScrapeRunResponse, ScrapeTaskPayload
 
 
@@ -64,7 +65,9 @@ class ScrapeOrchestratorService:
                 queue="scrape.tasks",
             )
 
-        return self._to_response(run)
+        response = self._to_response(run)
+        event_service.publish_created(response)
+        return response
 
     def list_runs(self) -> ScrapeRunListResponse:
         return ScrapeRunListResponse(items=[self._to_response(run) for run in self.repository.list_runs()])
@@ -104,4 +107,3 @@ class ScrapeOrchestratorService:
         parts = [item.strip() for item in query.replace("\n", ",").replace(";", ",").split(",")]
         normalized = [item for item in parts if item]
         return normalized or [query.strip()]
-

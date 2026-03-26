@@ -4,7 +4,9 @@ from sqlalchemy.orm import Session
 
 from app.models import AdapterDiagnostic, PayloadType, RawScrapePayload, ScrapeRunStatus, ScrapeTaskStatus
 from app.repositories.scrape_repository import ScrapeRepository
+from app.services.run_event_service import event_service
 from shared_types import ScrapeTaskArtifactsRequest, ScrapeTaskStatusUpdateRequest
+from shared_types import ScrapeRunResponse
 
 
 class ScrapeRunStatusService:
@@ -63,6 +65,26 @@ class ScrapeRunStatusService:
             run.status = ScrapeRunStatus.RUNNING
 
         self.db.commit()
+        event_service.publish_updated(
+            ScrapeRunResponse(
+                id=run.id,
+                source=run.source,
+                query=run.query,
+                location=run.location,
+                status=run.status.value,
+                total_tasks=run.total_tasks,
+                completed_tasks=run.completed_tasks,
+                total_found=run.total_found,
+                total_inserted=run.total_inserted,
+                total_updated=run.total_updated,
+                total_duplicates=run.total_duplicates,
+                total_failed=run.total_failed,
+                started_at=run.started_at,
+                finished_at=run.finished_at,
+                created_at=run.created_at,
+                updated_at=run.updated_at,
+            )
+        )
 
     def store_task_artifacts(self, request: ScrapeTaskArtifactsRequest) -> None:
         task = self.repository.get_task(request.scrape_task_id)
@@ -96,4 +118,3 @@ class ScrapeRunStatusService:
         if diagnostics:
             self.repository.add_diagnostics(diagnostics)
         self.db.commit()
-

@@ -1,5 +1,6 @@
 import { apiFetch } from "@/lib/api";
 import { createScrapeRun } from "./actions";
+import { ScrapeRunsDashboard } from "./scrape-runs-dashboard";
 
 type ScrapeRun = {
   id: string;
@@ -34,6 +35,11 @@ export default async function ScrapeRunsPage() {
     <div className="space-y-4">
       <div className="text-sm uppercase tracking-[0.3em] text-slate-500">Operations</div>
       <h1 className="text-3xl font-semibold text-slate-900">Scrape Runs</h1>
+      <p className="max-w-3xl text-sm text-slate-600">
+        Each scrape run creates one task per query per results page. Example: 1 query with 5 pages
+        creates 5 tasks. If you enter 2 comma-separated queries with 5 pages, the run creates 10
+        tasks.
+      </p>
       <form
         action={createScrapeRun}
         className="grid gap-3 rounded-[24px] border border-slate-200 bg-white p-6 md:grid-cols-4"
@@ -56,14 +62,18 @@ export default async function ScrapeRunsPage() {
           className="rounded-2xl border border-slate-200 px-4 py-3"
         />
         <div className="flex gap-3">
-          <input
-            name="max_pages"
-            type="number"
-            min="1"
-            max="25"
-            defaultValue="1"
-            className="w-24 rounded-2xl border border-slate-200 px-4 py-3"
-          />
+          <label className="flex min-w-[168px] flex-col gap-1 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-600">
+            <span className="font-medium text-slate-900">Pages to Scan</span>
+            <input
+              name="max_pages"
+              type="number"
+              min="1"
+              max="25"
+              defaultValue="1"
+              className="w-full bg-transparent text-base text-slate-900 outline-none"
+            />
+            <span className="text-xs text-slate-500">1 page = 1 task per query</span>
+          </label>
           <button className="flex-1 rounded-2xl bg-slate-950 px-4 py-3 font-medium text-white">
             Start Run
           </button>
@@ -74,40 +84,7 @@ export default async function ScrapeRunsPage() {
           Unable to load scrape runs from the gateway right now.
         </div>
       )}
-      {!error && data?.items.length === 0 && (
-        <div className="rounded-[24px] border border-slate-200 bg-white p-6 text-slate-600">
-          No scrape runs yet. Create one through the API gateway to start the ingestion pipeline.
-        </div>
-      )}
-      <div className="space-y-4">
-        {data?.items.map((run) => (
-          <article key={run.id} className="rounded-[24px] border border-slate-200 bg-white p-6">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h2 className="text-xl font-semibold text-slate-900">{run.source}</h2>
-                <p className="mt-1 text-sm text-slate-600">
-                  {run.query ?? "No query"} - {run.location ?? "No location"}
-                </p>
-              </div>
-              <div className="rounded-full bg-slate-100 px-3 py-1 text-sm font-medium text-slate-700">
-                {run.status}
-              </div>
-            </div>
-            <div className="mt-4 grid gap-3 text-sm text-slate-600 md:grid-cols-3 xl:grid-cols-6">
-              <div className="rounded-2xl bg-slate-50 p-3">
-                Tasks: {run.completed_tasks}/{run.total_tasks}
-              </div>
-              <div className="rounded-2xl bg-slate-50 p-3">Found: {run.total_found}</div>
-              <div className="rounded-2xl bg-slate-50 p-3">Inserted: {run.total_inserted}</div>
-              <div className="rounded-2xl bg-slate-50 p-3">Updated: {run.total_updated}</div>
-              <div className="rounded-2xl bg-slate-50 p-3">
-                Duplicates: {run.total_duplicates}
-              </div>
-              <div className="rounded-2xl bg-slate-50 p-3">Failed: {run.total_failed}</div>
-            </div>
-          </article>
-        ))}
-      </div>
+      {!error && <ScrapeRunsDashboard initialRuns={data?.items ?? []} />}
     </div>
   );
 }

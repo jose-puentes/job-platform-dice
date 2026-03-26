@@ -11,6 +11,7 @@ dependencies = [
   "uvicorn[standard]>=0.34.0",
   "httpx>=0.28.0",
   "shared-config",
+  "shared-events",
   "shared-http",
   "shared-types",
   "shared-utils",
@@ -18,4 +19,3 @@ dependencies = [
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]
-
