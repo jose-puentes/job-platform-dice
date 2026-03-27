@@ -4,8 +4,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
-import { apiBaseUrl } from "@/lib/api";
-
 type ActionKind = "apply" | "resume" | "cover-letter";
 type ActionState = {
   apply?: string;
@@ -62,7 +60,7 @@ export function JobsList({
       return;
     }
 
-    await fetch(`${apiBaseUrl}/apply-runs`, {
+    await fetch(`/api/apply-runs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ job_ids: selected, triggered_by: "web" }),
@@ -93,7 +91,7 @@ export function JobsList({
           : `/jobs/${jobId}/documents/cover-letter`;
 
     try {
-      const response = await fetch(`${apiBaseUrl}${endpoint}`, { method: "POST" });
+      const response = await fetch(`/api${endpoint}`, { method: "POST" });
       if (!response.ok) {
         throw new Error("Action failed");
       }

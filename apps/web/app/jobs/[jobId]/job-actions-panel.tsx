@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 
-import { apiBaseUrl } from "@/lib/api";
 import { DocumentPanel } from "./document-panel";
 
 type DocumentItem = {
@@ -86,7 +85,7 @@ export function JobActionsPanel({
       }
       const run = payload.payload.run;
 
-      const response = await fetch(`${apiBaseUrl}/jobs/${jobId}/documents`, {
+      const response = await fetch(`/api/jobs/${jobId}/documents`, {
         cache: "no-store",
       });
       if (response.ok) {
@@ -164,7 +163,7 @@ export function JobActionsPanel({
           ? `/jobs/${jobId}/documents/resume`
           : `/jobs/${jobId}/documents/cover-letter`;
 
-    const response = await fetch(`${apiBaseUrl}${endpoint}`, { method: "POST" });
+    const response = await fetch(`/api${endpoint}`, { method: "POST" });
     if (!response.ok) {
       setBusy(key, false);
       setStatus(key, action === "apply" ? "Failed to start apply run" : "Failed to start generation");
