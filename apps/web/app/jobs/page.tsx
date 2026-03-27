@@ -9,6 +9,7 @@ type JobItem = {
   company: string;
   source: string;
   location: string | null;
+  short_description: string | null;
   work_mode: string;
   employment_type: string;
 };

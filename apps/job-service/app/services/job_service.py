@@ -121,6 +121,7 @@ class JobCatalogService:
             company=job.company.name,
             source=job.source.source_name,
             location=job.location,
+            short_description=job.short_description or job.description[:280],
             work_mode=job.work_mode.value,
             employment_type=job.employment_type.value,
             posted_at=job.posted_at,
@@ -132,13 +133,12 @@ class JobCatalogService:
 
     def _to_detail(self, job: Job) -> JobDetail:
         summary = self._to_summary(job)
-        return JobDetail(
-            **summary.model_dump(),
+        detail_data = summary.model_dump()
+        detail_data.update(
             description=job.description,
-            short_description=job.short_description,
             application_url=job.application_url,
             job_url=job.job_url,
             first_seen_at=job.first_seen_at,
             last_seen_at=job.last_seen_at,
         )
-
+        return JobDetail(**detail_data)

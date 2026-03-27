@@ -2,9 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
 import { apiBaseUrl } from "@/lib/api";
+
+type ActionKind = "apply" | "resume" | "cover-letter";
+type ActionState = {
+  apply?: string;
+  resume?: string;
+  coverLetter?: string;
+};
 
 type JobItem = {
   id: string;
@@ -12,6 +19,7 @@ type JobItem = {
   company: string;
   source: string;
   location: string | null;
+  short_description: string | null;
   work_mode: string;
   employment_type: string;
 };
@@ -24,8 +32,30 @@ export function JobsList({
   empty: boolean;
 }) {
   const [selected, setSelected] = useState<string[]>([]);
+  const [actionStatus, setActionStatus] = useState<Record<string, ActionState>>({});
+  const [busyActions, setBusyActions] = useState<Record<string, ActionState>>({});
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+
+  function updateActionStatus(jobId: string, action: ActionKind, message: string) {
+    setActionStatus((current) => ({
+      ...current,
+      [jobId]: {
+        ...current[jobId],
+        [action === "cover-letter" ? "coverLetter" : action]: message,
+      },
+    }));
+  }
+
+  function setActionBusy(jobId: string, action: ActionKind, value: boolean) {
+    setBusyActions((current) => ({
+      ...current,
+      [jobId]: {
+        ...current[jobId],
+        [action === "cover-letter" ? "coverLetter" : action]: value ? "busy" : undefined,
+      },
+    }));
+  }
 
   async function runBatchApply() {
     if (selected.length === 0) {
@@ -44,6 +74,122 @@ export function JobsList({
       router.refresh();
     });
   }
+
+  async function runJobAction(jobId: string, action: ActionKind) {
+    const labels = {
+      apply: "Applying...",
+      resume: "Building resume...",
+      "cover-letter": "Building cover letter...",
+    } as const;
+
+    setActionBusy(jobId, action, true);
+    updateActionStatus(jobId, action, labels[action]);
+
+    const endpoint =
+      action === "apply"
+        ? `/jobs/${jobId}/apply`
+        : action === "resume"
+          ? `/jobs/${jobId}/documents/resume`
+          : `/jobs/${jobId}/documents/cover-letter`;
+
+    try {
+      const response = await fetch(`${apiBaseUrl}${endpoint}`, { method: "POST" });
+      if (!response.ok) {
+        throw new Error("Action failed");
+      }
+
+      updateActionStatus(
+        jobId,
+        action,
+        action === "apply"
+          ? "Apply run started"
+          : action === "resume"
+            ? "Resume generation started"
+            : "Cover letter generation started"
+      );
+      startTransition(() => {
+        router.refresh();
+      });
+    } catch {
+      updateActionStatus(jobId, action, "Action failed");
+    } finally {
+      setActionBusy(jobId, action, false);
+    }
+  }
+
+  useEffect(() => {
+    const eventSource = new EventSource("/api/job-actions/stream");
+
+    eventSource.addEventListener("document_generation.created", (event) => {
+      const payload = JSON.parse((event as MessageEvent).data);
+      const run = payload.payload?.run;
+      if (!run?.job_id) {
+        return;
+      }
+      updateActionStatus(
+        run.job_id,
+        run.document_type === "resume" ? "resume" : "cover-letter",
+        run.document_type === "resume" ? "Resume queued" : "Cover letter queued"
+      );
+    });
+
+    eventSource.addEventListener("document_generation.updated", (event) => {
+      const payload = JSON.parse((event as MessageEvent).data);
+      const run = payload.payload?.run;
+      if (!run?.job_id) {
+        return;
+      }
+
+      const nextLabel =
+        run.status === "completed"
+          ? run.document_type === "resume"
+            ? "Resume ready"
+            : "Cover letter ready"
+          : run.status === "failed"
+            ? `${run.document_type === "resume" ? "Resume" : "Cover letter"} failed`
+            : `${run.document_type === "resume" ? "Resume" : "Cover letter"} generating...`;
+
+      updateActionStatus(
+        run.job_id,
+        run.document_type === "resume" ? "resume" : "cover-letter",
+        nextLabel
+      );
+    });
+
+    eventSource.addEventListener("apply_attempt.created", (event) => {
+      const payload = JSON.parse((event as MessageEvent).data);
+      const attempt = payload.payload?.attempt;
+      if (!attempt?.job_id) {
+        return;
+      }
+      updateActionStatus(attempt.job_id, "apply", "Apply queued");
+    });
+
+    eventSource.addEventListener("apply_attempt.updated", (event) => {
+      const payload = JSON.parse((event as MessageEvent).data);
+      const attempt = payload.payload?.attempt;
+      const application = payload.payload?.application;
+      if (!attempt?.job_id) {
+        return;
+      }
+
+      let nextLabel = "Applying...";
+      if (attempt.status === "completed") {
+        nextLabel =
+          application?.application_status === "manual_assist"
+            ? "Manual assist required"
+            : "Application completed";
+      } else if (attempt.status === "failed") {
+        nextLabel = "Apply failed";
+      }
+
+      updateActionStatus(attempt.job_id, "apply", nextLabel);
+    });
+
+    return () => {
+      eventSource.close();
+    };
+  }, []);
 
   return (
     <section className="space-y-4">
@@ -64,6 +210,8 @@ export function JobsList({
       )}
       {jobs.map((job) => {
         const checked = selected.includes(job.id);
+        const status = actionStatus[job.id];
+        const busy = busyActions[job.id] ?? {};
         return (
           <article
             key={job.id}
@@ -82,13 +230,20 @@ export function JobsList({
                   );
                 }}
               />
-              <Link href={`/jobs/${job.id}`} className="flex-1">
+              <div className="flex-1">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <h3 className="text-xl font-semibold text-slate-900">{job.title}</h3>
+                    <Link href={`/jobs/${job.id}`} className="text-xl font-semibold text-slate-900">
+                      {job.title}
+                    </Link>
                     <p className="mt-1 text-sm text-slate-600">
                       {job.company} - {job.location ?? "Location not specified"} - {job.source}
                     </p>
+                    {job.short_description && (
+                      <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
+                        {job.short_description}
+                      </p>
+                    )}
                   </div>
                   <div className="flex gap-2 text-xs font-medium">
                     <span className="rounded-full bg-teal-50 px-3 py-1 text-teal-700">
@@ -99,7 +254,52 @@ export function JobsList({
                     </span>
                   </div>
                 </div>
-              </Link>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => runJobAction(job.id, "apply")}
+                    disabled={busy.apply === "busy"}
+                    className="rounded-xl bg-slate-950 px-3 py-2 text-sm font-medium text-white"
+                  >
+                    {busy.apply === "busy" ? "Starting..." : "Apply"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => runJobAction(job.id, "resume")}
+                    disabled={busy.resume === "busy"}
+                    className="rounded-xl bg-teal-700 px-3 py-2 text-sm font-medium text-white"
+                  >
+                    {busy.resume === "busy" ? "Starting..." : "Build Resume"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => runJobAction(job.id, "cover-letter")}
+                    disabled={busy.coverLetter === "busy"}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900"
+                  >
+                    {busy.coverLetter === "busy" ? "Starting..." : "Build Cover Letter"}
+                  </button>
+                </div>
+                {status && (
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                    {status.apply && (
+                      <span className="rounded-full bg-slate-100 px-3 py-1 text-slate-700">
+                        Apply: {status.apply}
+                      </span>
+                    )}
+                    {status.resume && (
+                      <span className="rounded-full bg-teal-50 px-3 py-1 text-teal-700">
+                        Resume: {status.resume}
+                      </span>
+                    )}
+                    {status.coverLetter && (
+                      <span className="rounded-full bg-amber-50 px-3 py-1 text-amber-700">
+                        Cover letter: {status.coverLetter}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           </article>
         );

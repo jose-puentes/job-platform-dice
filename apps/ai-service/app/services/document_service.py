@@ -9,8 +9,15 @@ from app.models import DocumentType, GenerationStatus, PromptTemplate, TemplateT
 from app.core.queue import celery_app
 from app.repositories.document_repository import DocumentRepository
 from app.services.docx_builder import build_docx
+from app.services.document_event_service import event_service
 from app.services.openai_client import generate_text
-from app.services.prompt_templates import DEFAULT_TEMPLATES
+from app.services.prompt_templates import (
+    DEFAULT_TEMPLATES,
+    DOCX_RENDERING_PROMPT,
+    build_docx_render_prompt,
+    build_document_generation_prompt,
+    build_fallback_document,
+)
 from docx import Document as DocxDocument
 from shared_http import build_async_client
 from shared_types import (
@@ -61,6 +68,7 @@ class DocumentService:
             requested_by=request.requested_by,
         )
         self.db.commit()
+        event_service.publish_created(run)
         celery_app.send_task(
             "worker.execute_document_generation",
             kwargs={"run_id": str(run.id)},
@@ -100,6 +108,7 @@ class DocumentService:
 
         run.status = GenerationStatus.RUNNING
         self.db.commit()
+        event_service.publish_updated(run)
 
         try:
             template = self.repository.get_active_template(
@@ -113,11 +122,22 @@ class DocumentService:
                 response.raise_for_status()
                 job = response.json()
 
-            prompt = self._build_prompt(template.content, job)
-            generated_text = generate_text(prompt)
+            prompt = build_document_generation_prompt(run.document_type, template.content, job)
+            generated_text = generate_text(
+                prompt,
+                fallback_text=build_fallback_document(run.document_type, job),
+            )
+            rendered_text = generate_text(
+                build_docx_render_prompt(run.document_type, generated_text),
+                fallback_text=generated_text,
+            )
             file_name = f"{run.job_id}_{run.document_type.value}_{run.id}.docx"
             file_path = str(Path(settings.document_storage_path) / file_name)
-            build_docx(file_path, f"{run.document_type.value.replace('_', ' ').title()} for {job['title']}", generated_text)
+            build_docx(
+                file_path,
+                f"{run.document_type.value.replace('_', ' ').title()} for {job['title']}",
+                rendered_text,
+            )
 
             document = self.repository.create_document(
                 job_id=run.job_id,
@@ -126,15 +146,23 @@ class DocumentService:
                 model_name=run.model_name,
                 file_path=file_path,
                 status=GenerationStatus.COMPLETED,
-                metadata={"prompt_template_id": str(run.prompt_template_id)},
+                metadata={
+                    "prompt_template_id": str(run.prompt_template_id),
+                    "generated_text": generated_text,
+                    "rendered_text": rendered_text,
+                    "content_prompt": prompt,
+                    "docx_rendering_prompt": DOCX_RENDERING_PROMPT,
+                },
             )
             run.status = GenerationStatus.COMPLETED
             self.db.commit()
+            event_service.publish_updated(run, document_id=str(document.id))
             return self._to_document_response(document)
         except Exception as exc:
             run.status = GenerationStatus.FAILED
             run.error_message = str(exc)
             self.db.commit()
+            event_service.publish_updated(run)
             raise
 
     def list_documents(self, job_id: UUID) -> DocumentListResponse:
@@ -199,16 +227,6 @@ class DocumentService:
         if not template:
             raise HTTPException(status_code=500, detail=f"Active template missing for {document_type.value}")
         return template
-
-    @staticmethod
-    def _build_prompt(template: str, job: dict) -> str:
-        return (
-            f"{template}\n\n"
-            f"Job title: {job['title']}\n"
-            f"Company: {job['company']}\n"
-            f"Location: {job.get('location')}\n"
-            f"Description:\n{job['description']}\n"
-        )
 
     @staticmethod
     def _to_generation_response(run) -> GenerationRunResponse:

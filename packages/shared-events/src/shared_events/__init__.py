@@ -1,4 +1,12 @@
 from shared_events.envelope import EventEnvelope
+from shared_events.job_actions import (
+    APPLY_ATTEMPT_CREATED,
+    APPLY_ATTEMPT_UPDATED,
+    APPLY_EVENTS_CHANNEL,
+    DOCUMENT_EVENTS_CHANNEL,
+    DOCUMENT_GENERATION_CREATED,
+    DOCUMENT_GENERATION_UPDATED,
+)
 from shared_events.scrape_runs import (
     SCRAPE_RUN_CREATED,
     SCRAPE_RUN_EVENTS_CHANNEL,
@@ -7,6 +15,12 @@ from shared_events.scrape_runs import (
 
 __all__ = [
     "EventEnvelope",
+    "APPLY_ATTEMPT_CREATED",
+    "APPLY_ATTEMPT_UPDATED",
+    "APPLY_EVENTS_CHANNEL",
+    "DOCUMENT_EVENTS_CHANNEL",
+    "DOCUMENT_GENERATION_CREATED",
+    "DOCUMENT_GENERATION_UPDATED",
     "SCRAPE_RUN_CREATED",
     "SCRAPE_RUN_EVENTS_CHANNEL",
     "SCRAPE_RUN_UPDATED",

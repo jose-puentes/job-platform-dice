@@ -16,6 +16,7 @@ from app.models import (
     ApplyRunStatus,
 )
 from app.repositories.application_repository import ApplicationRepository
+from app.services.apply_event_service import event_service
 from app.services.strategies import determine_apply_strategy
 from shared_http import build_async_client
 from shared_types import (
@@ -72,6 +73,7 @@ class ApplicationService:
             run.started_at = datetime.now(UTC)
         run.status = ApplyRunStatus.RUNNING
         self.db.commit()
+        event_service.publish_updated(run, attempt)
 
         try:
             async with build_async_client(settings.job_service_url) as client:
@@ -142,6 +144,7 @@ class ApplicationService:
                 run.status = ApplyRunStatus.COMPLETED
                 run.finished_at = datetime.now(UTC)
             self.db.commit()
+            event_service.publish_updated(run, attempt, application=application)
             return self._to_application_response(application)
         except Exception as exc:
             attempt.status = ApplyAttemptStatus.FAILED
@@ -151,6 +154,7 @@ class ApplicationService:
             if run.completed_jobs + run.failed_jobs == run.total_jobs:
                 run.finished_at = datetime.now(UTC)
             self.db.commit()
+            event_service.publish_updated(run, attempt)
             raise
 
     def _create_run(self, job_ids: list[UUID], triggered_by: str, mode: ApplyMode) -> ApplyRunResponse:
@@ -174,6 +178,8 @@ class ApplicationService:
             ]
         )
         self.db.commit()
+        for attempt in attempts:
+            event_service.publish_created(run, attempt)
 
         for attempt in attempts:
             celery_app.send_task(
@@ -218,4 +224,3 @@ class ApplicationService:
             created_at=application.created_at,
             updated_at=application.updated_at,
         )
-

@@ -26,6 +26,7 @@ class JobSummary(BaseModel):
     company: str
     source: str
     location: str | None = None
+    short_description: str | None = None
     work_mode: str
     employment_type: str
     posted_at: datetime | None = None
@@ -37,7 +38,6 @@ class JobSummary(BaseModel):
 
 class JobDetail(JobSummary):
     description: str
-    short_description: str | None = None
     application_url: str | None = None
     job_url: str
     first_seen_at: datetime
@@ -57,4 +57,3 @@ class JobFilterMetadata(BaseModel):
     locations: list[str]
     work_modes: list[str]
     employment_types: list[str]
-

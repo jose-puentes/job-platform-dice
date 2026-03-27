@@ -5,6 +5,7 @@ from app.api.applications import router as applications_router
 from app.api.document_download import router as document_download_router
 from app.api.documents import router as documents_router
 from app.api.health import router as health_router
+from app.api.job_actions import router as job_actions_router
 from app.api.jobs import router as jobs_router
 from app.api.scrape_runs import router as scrape_runs_router
 from app.core.config import settings
@@ -24,5 +25,6 @@ app.include_router(health_router)
 app.include_router(applications_router)
 app.include_router(document_download_router)
 app.include_router(documents_router)
+app.include_router(job_actions_router)
 app.include_router(jobs_router)
 app.include_router(scrape_runs_router)

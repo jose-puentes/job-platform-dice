@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/api";
-import { applyToJob, generateCoverLetter, generateResume } from "./actions";
+import { JobActionsPanel } from "./job-actions-panel";
 
 type JobDetail = {
   id: string;
@@ -57,70 +57,11 @@ export default async function JobDetailPage({
         </article>
         <aside className="rounded-[24px] border border-slate-200 bg-slate-50 p-6">
           <h2 className="text-xl font-semibold text-slate-900">Actions</h2>
-          <div className="mt-4 space-y-3">
-            <form action={applyToJob.bind(null, jobId)}>
-              <button className="w-full rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white">
-                Apply
-              </button>
-            </form>
-            <form action={generateResume.bind(null, jobId)}>
-              <button className="w-full rounded-2xl bg-teal-700 px-4 py-3 text-sm font-medium text-white">
-                Build Resume
-              </button>
-            </form>
-            <form action={generateCoverLetter.bind(null, jobId)}>
-              <button className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900">
-                Build Cover Letter
-              </button>
-            </form>
-          </div>
-          <div className="mt-4 space-y-2 text-sm text-slate-600">
-            {documents.items.length === 0 && documents.generation_runs.length === 0 && (
-              <div>No generated documents yet.</div>
-            )}
-            {documents.generation_runs.map((run) => (
-              <div key={run.id} className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
-                <div>
-                  {run.document_type} generation - {run.status}
-                </div>
-                {run.error_message && <div className="mt-1 text-rose-600">{run.error_message}</div>}
-              </div>
-            ))}
-            {documents.items.map((document) => (
-              <div
-                key={document.id}
-                className="rounded-2xl border border-slate-200 bg-white px-3 py-3"
-              >
-                <div className="font-medium text-slate-900">
-                  {document.document_type.replaceAll("_", " ")} - {document.generation_status}
-                </div>
-                <div className="mt-2 flex gap-3 text-sm">
-                  <a
-                    href={`/api/documents/${document.id}/preview`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-teal-700 underline"
-                  >
-                    Preview
-                  </a>
-                  <a
-                    href={`/api/documents/${document.id}/download`}
-                    className="text-slate-700 underline"
-                  >
-                    Download
-                  </a>
-                </div>
-              </div>
-            ))}
-          </div>
-          <a
-            href={job.application_url ?? job.job_url}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-4 block text-sm text-slate-500 underline"
-          >
-            Open original application
-          </a>
+          <JobActionsPanel
+            jobId={jobId}
+            documents={documents}
+            applicationLink={job.application_url ?? job.job_url}
+          />
         </aside>
       </div>
     </div>

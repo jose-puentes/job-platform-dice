@@ -1,0 +1,16 @@
+DOCUMENT_EVENTS_CHANNEL = "documents"
+DOCUMENT_GENERATION_CREATED = "document_generation.created"
+DOCUMENT_GENERATION_UPDATED = "document_generation.updated"
+
+APPLY_EVENTS_CHANNEL = "apply"
+APPLY_ATTEMPT_CREATED = "apply_attempt.created"
+APPLY_ATTEMPT_UPDATED = "apply_attempt.updated"
+
+__all__ = [
+    "APPLY_ATTEMPT_CREATED",
+    "APPLY_ATTEMPT_UPDATED",
+    "APPLY_EVENTS_CHANNEL",
+    "DOCUMENT_EVENTS_CHANNEL",
+    "DOCUMENT_GENERATION_CREATED",
+    "DOCUMENT_GENERATION_UPDATED",
+]
