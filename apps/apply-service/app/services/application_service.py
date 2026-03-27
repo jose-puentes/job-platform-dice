@@ -9,6 +9,7 @@ from app.models import (
     Application,
     ApplicationEvent,
     ApplicationStatus,
+    ApplyStrategy,
     ApplyAttempt,
     ApplyAttemptStatus,
     ApplyMode,
@@ -17,6 +18,7 @@ from app.models import (
 )
 from app.repositories.application_repository import ApplicationRepository
 from app.services.apply_event_service import event_service
+from app.services.dice_apply import ApplyAutomationResult, ManualAssistRequired, execute_dice_internal_apply
 from app.services.strategies import determine_apply_strategy
 from shared_http import build_async_client
 from shared_types import (
@@ -72,19 +74,31 @@ class ApplicationService:
         if not run.started_at:
             run.started_at = datetime.now(UTC)
         run.status = ApplyRunStatus.RUNNING
+        attempt.metadata_json = {"logs": []}
         self.db.commit()
-        event_service.publish_updated(run, attempt)
+        await self._log_attempt_step(run, attempt, "apply.started", "Starting apply attempt.")
 
         try:
             async with build_async_client(settings.job_service_url) as client:
                 job_response = await client.get(f"/internal/jobs/{payload.job_id}")
                 job_response.raise_for_status()
                 job = job_response.json()
+            await self._log_attempt_step(run, attempt, "apply.job_loaded", "Loaded job details.", {"job_url": job.get("job_url")})
 
             strategy = determine_apply_strategy(job)
             attempt.strategy = strategy
+            self.db.commit()
+            event_service.publish_updated(run, attempt)
+            await self._log_attempt_step(
+                run,
+                attempt,
+                "apply.strategy_selected",
+                f"Selected apply strategy: {strategy.value}.",
+                {"strategy": strategy.value},
+            )
 
             async with build_async_client(settings.ai_service_url, timeout=120.0) as ai_client:
+                await self._log_attempt_step(run, attempt, "apply.ensure_documents", "Ensuring resume and cover letter.")
                 ensure_response = await ai_client.post(
                     "/internal/generations/ensure",
                     json=EnsureDocumentsRequest(
@@ -97,6 +111,13 @@ class ApplicationService:
                 ensure_data = ensure_response.json()
 
                 for run_item in ensure_data["queued_runs"]:
+                    await self._log_attempt_step(
+                        run,
+                        attempt,
+                        "apply.generate_document",
+                        f"Generating {run_item['document_type'].replace('_', ' ')}.",
+                        {"document_type": run_item["document_type"]},
+                    )
                     execute_response = await ai_client.post(
                         f"/internal/generations/{run_item['id']}/execute"
                     )
@@ -105,39 +126,80 @@ class ApplicationService:
                 docs_response = await ai_client.get(f"/internal/jobs/{payload.job_id}/documents")
                 docs_response.raise_for_status()
                 documents = docs_response.json()["items"]
+            await self._log_attempt_step(run, attempt, "apply.documents_ready", "Tailored documents are ready.")
 
             resume_doc = next((doc for doc in documents if doc["document_type"] == "resume"), None)
             cover_doc = next((doc for doc in documents if doc["document_type"] == "cover_letter"), None)
 
-            if strategy.value == "easy_apply":
-                app_status = ApplicationStatus.APPLIED
-                external_reference = f"auto-{payload.job_id}"
-                message = "Auto-apply completed successfully."
-            else:
-                app_status = ApplicationStatus.MANUAL_ASSIST
-                external_reference = job.get("application_url") or job.get("job_url")
-                message = "Manual assist required. Tailored documents generated and destination recorded."
+            automation_result = await self._execute_strategy(
+                strategy=strategy,
+                job=job,
+                resume_doc=resume_doc,
+                cover_doc=cover_doc,
+                run=run,
+                attempt=attempt,
+            )
 
             application = self.repository.add_application(
                 Application(
                     job_id=payload.job_id,
-                    application_status=app_status,
-                    apply_strategy=strategy,
+                    application_status=automation_result.application_status,
+                    apply_strategy=automation_result.apply_strategy,
                     resume_document_id=UUID(resume_doc["id"]) if resume_doc else None,
                     cover_letter_document_id=UUID(cover_doc["id"]) if cover_doc else None,
                     applied_at=datetime.now(UTC),
-                    external_reference=external_reference,
+                    external_reference=automation_result.external_reference,
                 )
             )
+            self._persist_attempt_logs_as_events(application.id, attempt)
             self.repository.add_event(
                 ApplicationEvent(
                     application_id=application.id,
                     event_type="apply_attempt_completed",
-                    message=message,
-                    metadata_json={"strategy": strategy.value},
+                    message=automation_result.message,
+                    metadata_json={
+                        "strategy": automation_result.apply_strategy.value,
+                        "attempt_logs": attempt.metadata_json.get("logs", []),
+                    },
                 )
             )
 
+            attempt.status = ApplyAttemptStatus.COMPLETED
+            run.completed_jobs += 1
+            if run.completed_jobs == run.total_jobs:
+                run.status = ApplyRunStatus.COMPLETED
+                run.finished_at = datetime.now(UTC)
+            self.db.commit()
+            event_service.publish_updated(run, attempt, application=application)
+            return self._to_application_response(application)
+        except ManualAssistRequired as exc:
+            await self._log_attempt_step(
+                run,
+                attempt,
+                "apply.manual_assist",
+                str(exc),
+                {"strategy": exc.strategy.value},
+            )
+            application = self.repository.add_application(
+                Application(
+                    job_id=payload.job_id,
+                    application_status=ApplicationStatus.MANUAL_ASSIST,
+                    apply_strategy=exc.strategy,
+                    resume_document_id=UUID(resume_doc["id"]) if resume_doc else None,
+                    cover_letter_document_id=UUID(cover_doc["id"]) if cover_doc else None,
+                    applied_at=datetime.now(UTC),
+                    external_reference=exc.external_reference or job.get("application_url") or job.get("job_url"),
+                )
+            )
+            self._persist_attempt_logs_as_events(application.id, attempt)
+            self.repository.add_event(
+                ApplicationEvent(
+                    application_id=application.id,
+                    event_type="apply_manual_assist",
+                    message=str(exc),
+                    metadata_json={"attempt_logs": attempt.metadata_json.get("logs", [])},
+                )
+            )
             attempt.status = ApplyAttemptStatus.COMPLETED
             run.completed_jobs += 1
             if run.completed_jobs == run.total_jobs:
@@ -156,6 +218,83 @@ class ApplicationService:
             self.db.commit()
             event_service.publish_updated(run, attempt)
             raise
+
+    async def _execute_strategy(
+        self,
+        *,
+        strategy,
+        job: dict,
+        resume_doc: dict | None,
+        cover_doc: dict | None,
+        run: ApplyRun,
+        attempt: ApplyAttempt,
+    ) -> ApplyAutomationResult:
+        if strategy == ApplyStrategy.EASY_APPLY and (job.get("source") or "").lower() == "dice":
+            return await execute_dice_internal_apply(
+                job=job,
+                resume_path=resume_doc["file_path"] if resume_doc else None,
+                cover_letter_path=cover_doc["file_path"] if cover_doc else None,
+                log_step=lambda event_type, message, metadata=None: self._log_attempt_step(
+                    run, attempt, event_type, message, metadata
+                ),
+            )
+
+        if strategy.value == "easy_apply":
+            return ApplyAutomationResult(
+                application_status=ApplicationStatus.APPLIED,
+                apply_strategy=strategy,
+                external_reference=f"auto-{attempt.job_id}",
+                message="Auto-apply completed successfully.",
+            )
+
+        if strategy.value == "external_redirect":
+            raise ManualAssistRequired(
+                "This job uses an external apply flow. Keeping it as manual assist for now.",
+                strategy=strategy,
+                external_reference=job.get("application_url") or job.get("job_url"),
+            )
+
+        raise ManualAssistRequired(
+            "Manual assist required. Tailored documents generated and destination recorded.",
+            strategy=ApplyStrategy.MANUAL_ASSIST,
+            external_reference=job.get("application_url") or job.get("job_url"),
+        )
+
+    async def _log_attempt_step(
+        self,
+        run: ApplyRun,
+        attempt: ApplyAttempt,
+        event_type: str,
+        message: str,
+        metadata: dict | None = None,
+    ) -> None:
+        logs = list(attempt.metadata_json.get("logs", []))
+        logs.append(
+            {
+                "event_type": event_type,
+                "message": message,
+                "metadata": metadata or {},
+                "occurred_at": datetime.now(UTC).isoformat(),
+            }
+        )
+        attempt.metadata_json = {
+            **attempt.metadata_json,
+            "current_step": event_type,
+            "logs": logs[-25:],
+        }
+        self.db.commit()
+        event_service.publish_updated(run, attempt)
+
+    def _persist_attempt_logs_as_events(self, application_id: UUID, attempt: ApplyAttempt) -> None:
+        for log in attempt.metadata_json.get("logs", []):
+            self.repository.add_event(
+                ApplicationEvent(
+                    application_id=application_id,
+                    event_type=log.get("event_type", "apply.log"),
+                    message=log.get("message", ""),
+                    metadata_json=log.get("metadata", {}),
+                )
+            )
 
     def _create_run(self, job_ids: list[UUID], triggered_by: str, mode: ApplyMode) -> ApplyRunResponse:
         run = self.repository.add_run(

@@ -20,6 +20,11 @@ class ServiceSettings(BaseSettings):
     openai_model: str = Field(default="gpt-5", alias="OPENAI_MODEL")
     document_storage_path: str = Field(default="/data/documents", alias="DOCUMENT_STORAGE_PATH")
     worker_concurrency: int = Field(default=4, alias="WORKER_CONCURRENCY")
+    dice_email: str | None = Field(default=None, alias="DICE_EMAIL")
+    dice_password: str | None = Field(default=None, alias="DICE_PASSWORD")
+    dice_login_url: str = Field(default="https://www.dice.com/dashboard/login", alias="DICE_LOGIN_URL")
+    browser_headless: bool = Field(default=True, alias="BROWSER_HEADLESS")
+    apply_browser_timeout_ms: int = Field(default=60000, alias="APPLY_BROWSER_TIMEOUT_MS")
 
     @field_validator("cors_origins", mode="before")
     @classmethod

@@ -31,6 +31,7 @@ class ApplyEventService:
                 "status": attempt.status.value,
                 "strategy": attempt.strategy.value if attempt.strategy else None,
                 "error_message": attempt.error_message,
+                "metadata": attempt.metadata_json,
             },
         }
         if application is not None:

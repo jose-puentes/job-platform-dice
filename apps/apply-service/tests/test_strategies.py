@@ -12,3 +12,9 @@ def test_strategy_uses_external_redirect_for_greenhouse() -> None:
     )
     assert strategy.value == "external_redirect"
 
+
+def test_strategy_uses_easy_apply_for_dice_internal_job_details() -> None:
+    strategy = determine_apply_strategy(
+        {"source": "dice", "application_url": "https://www.dice.com/job-detail/abc-123"}
+    )
+    assert strategy.value == "easy_apply"

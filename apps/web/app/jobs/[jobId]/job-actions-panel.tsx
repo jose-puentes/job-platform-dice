@@ -22,6 +22,13 @@ type DocumentsPayload = {
   generation_runs: GenerationRunItem[];
 };
 
+type ApplyLogItem = {
+  event_type: string;
+  message: string;
+  metadata: Record<string, unknown>;
+  occurred_at: string;
+};
+
 type ActionStatus = {
   apply?: string;
   resume?: string;
@@ -40,6 +47,7 @@ export function JobActionsPanel({
   const [documents, setDocuments] = useState(initialDocuments);
   const [actionStatus, setActionStatus] = useState<ActionStatus>({});
   const [busyAction, setBusyAction] = useState<ActionStatus>({});
+  const [applyLogs, setApplyLogs] = useState<ApplyLogItem[]>([]);
 
   function setStatus(key: keyof ActionStatus, value: string) {
     setActionStatus((current) => ({ ...current, [key]: value }));
@@ -124,6 +132,8 @@ export function JobActionsPanel({
 
       const attempt = payload.payload.attempt;
       const application = payload.payload.application;
+      const logs = (attempt.metadata?.logs as ApplyLogItem[] | undefined) ?? [];
+      setApplyLogs(logs);
 
       if (attempt.status === "running") {
         setStatus("apply", "Applying...");
@@ -215,6 +225,21 @@ export function JobActionsPanel({
               Cover letter: {actionStatus.coverLetter}
             </span>
           )}
+        </div>
+      )}
+      {applyLogs.length > 0 && (
+        <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+          <div className="text-sm font-semibold text-slate-900">Apply progress</div>
+          <div className="mt-3 space-y-2 text-sm text-slate-600">
+            {applyLogs.map((log) => (
+              <div key={`${log.event_type}-${log.occurred_at}`} className="rounded-xl bg-slate-50 px-3 py-2">
+                <div className="font-medium text-slate-900">{log.message}</div>
+                <div className="mt-1 text-xs uppercase tracking-[0.15em] text-slate-500">
+                  {log.event_type.replaceAll(".", " ")}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
       <DocumentPanel documents={documents} />
