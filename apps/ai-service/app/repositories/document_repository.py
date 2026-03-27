@@ -45,6 +45,13 @@ class DocumentRepository:
     def get_generation_run(self, run_id: UUID) -> GenerationRun | None:
         return self.db.execute(select(GenerationRun).where(GenerationRun.id == run_id)).scalar_one_or_none()
 
+    def list_generation_runs_for_job(self, job_id: UUID) -> list[GenerationRun]:
+        return self.db.execute(
+            select(GenerationRun)
+            .where(GenerationRun.job_id == job_id, GenerationRun.status != GenerationStatus.COMPLETED)
+            .order_by(desc(GenerationRun.created_at))
+        ).scalars().all()
+
     def list_documents_for_job(self, job_id: UUID) -> list[GeneratedDocument]:
         return self.db.execute(
             select(GeneratedDocument)
@@ -92,4 +99,3 @@ class DocumentRepository:
         self.db.add(document)
         self.db.flush()
         return document
-

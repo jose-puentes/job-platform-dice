@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter
+from fastapi.responses import Response
 
 from app.clients.services import ai_service_client
 from shared_types import (
@@ -50,3 +51,33 @@ async def get_document(document_id: UUID) -> DocumentResponse:
         response.raise_for_status()
         return DocumentResponse.model_validate(response.json())
 
+
+@router.get("/api/v1/documents/{document_id}/preview")
+async def preview_document(document_id: UUID) -> Response:
+    async with ai_service_client() as client:
+        response = await client.get(f"/internal/documents/{document_id}/preview")
+        response.raise_for_status()
+        return Response(
+            content=response.content,
+            media_type=response.headers.get("content-type", "text/html; charset=utf-8"),
+        )
+
+
+@router.get("/api/v1/documents/{document_id}/download")
+async def download_document(document_id: UUID) -> Response:
+    async with ai_service_client() as client:
+        response = await client.get(f"/internal/documents/{document_id}/download")
+        response.raise_for_status()
+        headers = {}
+        content_disposition = response.headers.get("content-disposition")
+        if content_disposition:
+            headers["Content-Disposition"] = content_disposition
+
+        return Response(
+            content=response.content,
+            media_type=response.headers.get(
+                "content-type",
+                "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ),
+            headers=headers,
+        )

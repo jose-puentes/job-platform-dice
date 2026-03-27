@@ -20,6 +20,13 @@ type DocumentItem = {
   generation_status: string;
 };
 
+type GenerationRunItem = {
+  id: string;
+  document_type: string;
+  status: string;
+  error_message: string | null;
+};
+
 export default async function JobDetailPage({
   params,
 }: {
@@ -28,7 +35,9 @@ export default async function JobDetailPage({
   const { jobId } = await params;
   const [job, documents] = await Promise.all([
     apiFetch<JobDetail>(`/jobs/${jobId}`),
-    apiFetch<{ items: DocumentItem[] }>(`/jobs/${jobId}/documents`).catch(() => ({ items: [] })),
+    apiFetch<{ items: DocumentItem[]; generation_runs: GenerationRunItem[] }>(
+      `/jobs/${jobId}/documents`
+    ).catch(() => ({ items: [], generation_runs: [] })),
   ]);
 
   return (
@@ -66,10 +75,41 @@ export default async function JobDetailPage({
             </form>
           </div>
           <div className="mt-4 space-y-2 text-sm text-slate-600">
-            {documents.items.length === 0 && <div>No generated documents yet.</div>}
+            {documents.items.length === 0 && documents.generation_runs.length === 0 && (
+              <div>No generated documents yet.</div>
+            )}
+            {documents.generation_runs.map((run) => (
+              <div key={run.id} className="rounded-2xl border border-slate-200 bg-white px-3 py-2">
+                <div>
+                  {run.document_type} generation - {run.status}
+                </div>
+                {run.error_message && <div className="mt-1 text-rose-600">{run.error_message}</div>}
+              </div>
+            ))}
             {documents.items.map((document) => (
-              <div key={document.id} className="rounded-2xl bg-white px-3 py-2">
-                {document.document_type} - {document.generation_status}
+              <div
+                key={document.id}
+                className="rounded-2xl border border-slate-200 bg-white px-3 py-3"
+              >
+                <div className="font-medium text-slate-900">
+                  {document.document_type.replaceAll("_", " ")} - {document.generation_status}
+                </div>
+                <div className="mt-2 flex gap-3 text-sm">
+                  <a
+                    href={`/api/documents/${document.id}/preview`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-teal-700 underline"
+                  >
+                    Preview
+                  </a>
+                  <a
+                    href={`/api/documents/${document.id}/download`}
+                    className="text-slate-700 underline"
+                  >
+                    Download
+                  </a>
+                </div>
               </div>
             ))}
           </div>

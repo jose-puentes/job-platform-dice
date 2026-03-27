@@ -10,9 +10,13 @@ def build_celery_app(service_name: str, redis_url: str) -> Celery:
         task_queues=(
             Queue(default_queue),
             Queue("scrape.tasks"),
+            Queue("ai.generate"),
+            Queue("apply.single"),
+            Queue("apply.batch"),
         ),
         task_routes={
             "worker.execute_scrape_task": {"queue": "scrape.tasks"},
+            "worker.execute_document_generation": {"queue": "ai.generate"},
         },
         task_serializer="json",
         accept_content=["json"],

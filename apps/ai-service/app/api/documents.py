@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.core.db import get_db
@@ -47,7 +47,17 @@ async def get_document(document_id: UUID, db: Session = Depends(get_db)) -> Docu
     return DocumentService(db).get_document(document_id)
 
 
+@router.get("/internal/documents/{document_id}/preview")
+async def preview_document(document_id: UUID, db: Session = Depends(get_db)) -> HTMLResponse:
+    html = DocumentService(db).build_document_preview(document_id)
+    return HTMLResponse(content=html)
+
+
 @router.get("/internal/documents/{document_id}/download")
 async def download_document(document_id: UUID, db: Session = Depends(get_db)) -> FileResponse:
     document = DocumentService(db).get_document(document_id)
-    return FileResponse(path=document.file_path, filename=document.file_path.split("/")[-1])
+    return FileResponse(
+        path=document.file_path,
+        filename=document.file_path.split("/")[-1],
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    )

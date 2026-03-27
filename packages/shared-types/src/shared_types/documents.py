@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class CreateDocumentRequest(BaseModel):
@@ -41,9 +41,9 @@ class DocumentResponse(BaseModel):
 
 class DocumentListResponse(BaseModel):
     items: list[DocumentResponse]
+    generation_runs: list[GenerationRunResponse] = Field(default_factory=list)
 
 
 class EnsureDocumentsResponse(BaseModel):
     documents: list[DocumentResponse]
     queued_runs: list[GenerationRunResponse]
-

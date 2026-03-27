@@ -1,3 +1,4 @@
+from html import escape
 from pathlib import Path
 from uuid import UUID
 
@@ -10,6 +11,7 @@ from app.repositories.document_repository import DocumentRepository
 from app.services.docx_builder import build_docx
 from app.services.openai_client import generate_text
 from app.services.prompt_templates import DEFAULT_TEMPLATES
+from docx import Document as DocxDocument
 from shared_http import build_async_client
 from shared_types import (
     CreateDocumentRequest,
@@ -137,7 +139,10 @@ class DocumentService:
 
     def list_documents(self, job_id: UUID) -> DocumentListResponse:
         return DocumentListResponse(
-            items=[self._to_document_response(document) for document in self.repository.list_documents_for_job(job_id)]
+            items=[self._to_document_response(document) for document in self.repository.list_documents_for_job(job_id)],
+            generation_runs=[
+                self._to_generation_response(run) for run in self.repository.list_generation_runs_for_job(job_id)
+            ],
         )
 
     def get_document(self, document_id: UUID) -> DocumentResponse:
@@ -145,6 +150,48 @@ class DocumentService:
         if not document:
             raise HTTPException(status_code=404, detail="Document not found")
         return self._to_document_response(document)
+
+    def build_document_preview(self, document_id: UUID) -> str:
+        document = self.repository.get_document(document_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        file_path = Path(document.file_path)
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Document file not found")
+
+        docx_document = DocxDocument(file_path)
+        paragraphs = [paragraph.text.strip() for paragraph in docx_document.paragraphs if paragraph.text.strip()]
+        title = paragraphs[0] if paragraphs else f"{document.document_type.value.replace('_', ' ').title()} preview"
+        body = "".join(f"<p>{escape(paragraph)}</p>" for paragraph in paragraphs[1:] or paragraphs[:1])
+
+        return (
+            "<!doctype html>"
+            "<html lang='en'>"
+            "<head>"
+            "<meta charset='utf-8' />"
+            f"<title>{escape(title)}</title>"
+            "<meta name='viewport' content='width=device-width, initial-scale=1' />"
+            "<style>"
+            "body{margin:0;background:#f8fafc;color:#0f172a;font-family:Georgia,'Times New Roman',serif;}"
+            "main{max-width:880px;margin:0 auto;padding:48px 24px 80px;}"
+            "header{margin-bottom:32px;padding-bottom:20px;border-bottom:1px solid #cbd5e1;}"
+            "h1{margin:0;font-size:2rem;line-height:1.2;}"
+            "p{font-size:1.05rem;line-height:1.8;margin:0 0 1rem;white-space:pre-wrap;}"
+            ".meta{margin-top:12px;color:#475569;font-size:.95rem;font-family:system-ui,sans-serif;}"
+            "</style>"
+            "</head>"
+            "<body>"
+            "<main>"
+            "<header>"
+            f"<h1>{escape(title)}</h1>"
+            f"<div class='meta'>Document type: {escape(document.document_type.value.replace('_', ' '))}</div>"
+            "</header>"
+            f"{body}"
+            "</main>"
+            "</body>"
+            "</html>"
+        )
 
     def _get_template_for_document_type(self, document_type: DocumentType) -> PromptTemplate:
         template_type = TemplateType.RESUME if document_type == DocumentType.RESUME else TemplateType.COVER_LETTER
