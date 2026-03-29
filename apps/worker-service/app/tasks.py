@@ -73,3 +73,19 @@ async def _execute_apply_task(payload: dict) -> dict:
         response = await apply_client.post("/internal/apply-attempts/execute", json=payload)
         response.raise_for_status()
         return response.json()
+
+
+@celery_app.task(name="worker.execute_apply_run")
+def execute_apply_run(payload: dict) -> dict:
+    return asyncio.run(_execute_apply_run(payload))
+
+
+async def _execute_apply_run(payload: dict) -> dict:
+    from shared_http import build_async_client
+
+    from app.core.config import settings
+
+    async with build_async_client(settings.apply_service_url, timeout=600.0) as apply_client:
+        response = await apply_client.post("/internal/apply-runs/execute", json=payload)
+        response.raise_for_status()
+        return response.json()

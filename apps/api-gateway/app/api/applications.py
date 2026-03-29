@@ -1,6 +1,7 @@
 from uuid import UUID
 
-from fastapi import APIRouter
+import httpx
+from fastapi import APIRouter, HTTPException
 
 from app.clients.services import apply_service_client
 from shared_types import (
@@ -62,4 +63,15 @@ async def get_application(application_id: UUID) -> ApplicationResponse:
     async with apply_service_client() as client:
         response = await client.get(f"/internal/applications/{application_id}")
         response.raise_for_status()
+        return ApplicationResponse.model_validate(response.json())
+
+
+@router.get("/api/v1/jobs/{job_id}/application", response_model=ApplicationResponse)
+async def get_latest_application_for_job(job_id: UUID) -> ApplicationResponse:
+    async with apply_service_client() as client:
+        try:
+            response = await client.get(f"/internal/jobs/{job_id}/application")
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text) from exc
         return ApplicationResponse.model_validate(response.json())

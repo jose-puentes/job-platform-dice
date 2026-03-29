@@ -12,6 +12,13 @@ type JobItem = {
   short_description: string | null;
   work_mode: string;
   employment_type: string;
+  is_active: boolean;
+};
+
+type ApplicationItem = {
+  id: string;
+  job_id: string;
+  application_status: string;
 };
 
 type JobsResponse = {
@@ -27,6 +34,10 @@ type JobFiltersResponse = {
   locations: string[];
   work_modes: string[];
   employment_types: string[];
+};
+
+type ApplicationsResponse = {
+  items: ApplicationItem[];
 };
 
 function buildQuery(params: Record<string, string>) {
@@ -69,6 +80,7 @@ export default async function JobsPage({
 
   let data: JobsResponse | null = null;
   let filters = filtersFallback;
+  let applications: ApplicationItem[] = [];
   let error = false;
 
   try {
@@ -85,9 +97,11 @@ export default async function JobsPage({
       sort,
       page,
     });
-    [data, filters] = await Promise.all([
+    const applicationsResponse = apiFetch<ApplicationsResponse>("/applications").catch(() => ({ items: [] }));
+    [data, filters, { items: applications }] = await Promise.all([
       apiFetch<JobsResponse>(`/jobs?${query.toString()}`),
       apiFetch<JobFiltersResponse>("/jobs/filters").catch(() => filtersFallback),
+      applicationsResponse,
     ]);
   } catch {
     error = true;
@@ -244,7 +258,11 @@ export default async function JobsPage({
             </div>
           )}
           {!error && (
-            <JobsList jobs={data?.items ?? []} empty={(data?.items.length ?? 0) === 0} />
+            <JobsList
+              jobs={data?.items ?? []}
+              empty={(data?.items.length ?? 0) === 0}
+              applications={applications}
+            />
           )}
           {!error && data && (
             <div className="flex items-center justify-between rounded-[24px] border border-slate-200 bg-white px-5 py-4 text-sm text-slate-600">

@@ -50,3 +50,7 @@ class ApplyAttemptPayload(BaseModel):
     job_id: UUID
     triggered_by: str = "system"
 
+
+class ApplyRunExecutionPayload(BaseModel):
+    apply_run_id: UUID
+    triggered_by: str = "system"

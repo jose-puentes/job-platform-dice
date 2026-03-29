@@ -86,6 +86,13 @@ class JobCatalogService:
             raise HTTPException(status_code=404, detail="Job not found")
         return self._to_detail(job)
 
+    def archive_job(self, job_id: UUID) -> JobDetail:
+        job = self.repository.archive_job(str(job_id))
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        self.db.commit()
+        return self._to_detail(job)
+
     def get_filter_metadata(self) -> JobFilterMetadata:
         return self.repository.get_filter_metadata()
 

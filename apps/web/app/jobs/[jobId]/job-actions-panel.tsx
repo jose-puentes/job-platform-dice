@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 
 import { DocumentPanel } from "./document-panel";
 
@@ -29,6 +30,11 @@ type ApplyLogItem = {
   occurred_at: string;
 };
 
+type ApplicationItem = {
+  id: string;
+  application_status: string;
+};
+
 type ActionStatus = {
   apply?: string;
   resume?: string;
@@ -39,15 +45,27 @@ export function JobActionsPanel({
   jobId,
   documents: initialDocuments,
   applicationLink,
+  initialApplication,
+  isJobActive,
 }: {
   jobId: string;
   documents: DocumentsPayload;
   applicationLink: string;
+  initialApplication: ApplicationItem | null;
+  isJobActive: boolean;
 }) {
   const [documents, setDocuments] = useState(initialDocuments);
+  const [application, setApplication] = useState<ApplicationItem | null>(initialApplication);
+  const [jobIsActive, setJobIsActive] = useState(isJobActive);
   const [actionStatus, setActionStatus] = useState<ActionStatus>({});
   const [busyAction, setBusyAction] = useState<ActionStatus>({});
   const [applyLogs, setApplyLogs] = useState<ApplyLogItem[]>([]);
+  const router = useRouter();
+
+  const hasResume = documents.items.some((document) => document.document_type === "resume");
+  const hasCoverLetter = documents.items.some((document) => document.document_type === "cover_letter");
+  const isApplied = application?.application_status === "applied";
+  const isArchived = !jobIsActive;
 
   function setStatus(key: keyof ActionStatus, value: string) {
     setActionStatus((current) => ({ ...current, [key]: value }));
@@ -138,10 +156,19 @@ export function JobActionsPanel({
       if (attempt.status === "running") {
         setStatus("apply", "Applying...");
       } else if (attempt.status === "completed") {
+        if (application) {
+          setApplication(application);
+        }
+        if (application?.application_status === "failed") {
+          setJobIsActive(false);
+          router.refresh();
+        }
         setStatus(
           "apply",
           application?.application_status === "manual_assist"
             ? "Manual assist required. Documents ready."
+            : application?.application_status === "failed"
+              ? "Job unavailable. Archived."
             : "Application completed"
         );
       } else if (attempt.status === "failed") {
@@ -153,10 +180,19 @@ export function JobActionsPanel({
     return () => {
       eventSource.close();
     };
-  }, [jobId]);
+  }, [jobId, router]);
 
   async function runAction(action: "apply" | "resume" | "cover-letter") {
     const key = action === "cover-letter" ? "coverLetter" : action;
+    if (action === "apply" && (isApplied || isArchived)) {
+      return;
+    }
+    if (action === "resume" && hasResume) {
+      return;
+    }
+    if (action === "cover-letter" && hasCoverLetter) {
+      return;
+    }
     setBusy(key, true);
     if (action === "apply") {
       setStatus("apply", "Starting apply run...");
@@ -176,7 +212,16 @@ export function JobActionsPanel({
     const response = await fetch(`/api${endpoint}`, { method: "POST" });
     if (!response.ok) {
       setBusy(key, false);
-      setStatus(key, action === "apply" ? "Failed to start apply run" : "Failed to start generation");
+      let nextMessage = action === "apply" ? "Failed to start apply run" : "Failed to start generation";
+      try {
+        const payload = (await response.json()) as { detail?: string };
+        if (payload.detail) {
+          nextMessage = payload.detail;
+        }
+      } catch {
+        // Ignore non-JSON error payloads and keep the generic message.
+      }
+      setStatus(key, nextMessage);
     }
   }
 
@@ -186,28 +231,43 @@ export function JobActionsPanel({
         <button
           type="button"
           onClick={() => runAction("apply")}
-          disabled={busyAction.apply === "busy"}
+          disabled={busyAction.apply === "busy" || isApplied || isArchived}
           className="w-full rounded-2xl bg-slate-950 px-4 py-3 text-sm font-medium text-white disabled:bg-slate-300"
         >
-          {busyAction.apply === "busy" ? "Starting..." : "Apply"}
+          {busyAction.apply === "busy"
+            ? "Starting..."
+            : isApplied
+              ? "Applied"
+              : isArchived
+                ? "Archived"
+                : "Apply"}
         </button>
         <button
           type="button"
           onClick={() => runAction("resume")}
-          disabled={busyAction.resume === "busy"}
+          disabled={busyAction.resume === "busy" || hasResume}
           className="w-full rounded-2xl bg-teal-700 px-4 py-3 text-sm font-medium text-white disabled:bg-teal-400"
         >
-          {busyAction.resume === "busy" ? "Starting..." : "Build Resume"}
+          {busyAction.resume === "busy" ? "Starting..." : hasResume ? "Resume Ready" : "Build Resume"}
         </button>
         <button
           type="button"
           onClick={() => runAction("cover-letter")}
-          disabled={busyAction.coverLetter === "busy"}
+          disabled={busyAction.coverLetter === "busy" || hasCoverLetter}
           className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 disabled:bg-slate-100"
         >
-          {busyAction.coverLetter === "busy" ? "Starting..." : "Build Cover Letter"}
+          {busyAction.coverLetter === "busy"
+            ? "Starting..."
+            : hasCoverLetter
+              ? "Cover Letter Ready"
+              : "Build Cover Letter"}
         </button>
       </div>
+      {isArchived && (
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          This job has been archived because it is no longer available to apply.
+        </div>
+      )}
       {(actionStatus.apply || actionStatus.resume || actionStatus.coverLetter) && (
         <div className="mt-4 flex flex-wrap gap-2 text-xs">
           {actionStatus.apply && (
@@ -242,7 +302,21 @@ export function JobActionsPanel({
           </div>
         </div>
       )}
-      <DocumentPanel documents={documents} />
+      <DocumentPanel
+        documents={documents}
+        onDeleted={(document) => {
+          setDocuments((current) => ({
+            ...current,
+            items: current.items.filter((item) => item.id !== document.id),
+          }));
+          if (document.document_type === "resume") {
+            setActionStatus((current) => ({ ...current, resume: "Resume removed" }));
+          }
+          if (document.document_type === "cover_letter") {
+            setActionStatus((current) => ({ ...current, coverLetter: "Cover letter removed" }));
+          }
+        }}
+      />
       <a
         href={applicationLink}
         target="_blank"

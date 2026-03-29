@@ -20,18 +20,37 @@ type JobItem = {
   short_description: string | null;
   work_mode: string;
   employment_type: string;
+  is_active: boolean;
+};
+
+type ApplicationItem = {
+  id: string;
+  job_id: string;
+  application_status: string;
 };
 
 export function JobsList({
   jobs,
   empty,
+  applications,
 }: {
   jobs: JobItem[];
   empty: boolean;
+  applications: ApplicationItem[];
 }) {
   const [selected, setSelected] = useState<string[]>([]);
   const [actionStatus, setActionStatus] = useState<Record<string, ActionState>>({});
   const [busyActions, setBusyActions] = useState<Record<string, ActionState>>({});
+  const [appliedJobs, setAppliedJobs] = useState<Record<string, boolean>>(
+    Object.fromEntries(
+      applications
+        .filter((application) => application.application_status === "applied")
+        .map((application) => [application.job_id, true])
+    )
+  );
+  const [archivedJobs, setArchivedJobs] = useState<Record<string, boolean>>(
+    Object.fromEntries(jobs.filter((job) => !job.is_active).map((job) => [job.id, true]))
+  );
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
 
@@ -56,14 +75,19 @@ export function JobsList({
   }
 
   async function runBatchApply() {
-    if (selected.length === 0) {
+    const eligibleJobIds = selected.filter((jobId) => {
+      const job = jobs.find((item) => item.id === jobId);
+      return job?.is_active && !archivedJobs[jobId] && !appliedJobs[jobId];
+    });
+
+    if (eligibleJobIds.length === 0) {
       return;
     }
 
     await fetch(`/api/apply-runs`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ job_ids: selected, triggered_by: "web" }),
+      body: JSON.stringify({ job_ids: eligibleJobIds, triggered_by: "web" }),
     });
 
     setSelected([]);
@@ -74,6 +98,17 @@ export function JobsList({
   }
 
   async function runJobAction(jobId: string, action: ActionKind) {
+    const job = jobs.find((item) => item.id === jobId);
+    if (!job) {
+      return;
+    }
+    if (action === "apply" && (!job.is_active || archivedJobs[jobId] || appliedJobs[jobId])) {
+      return;
+    }
+    if (action !== "apply" && (!job.is_active || archivedJobs[jobId])) {
+      return;
+    }
+
     const labels = {
       apply: "Applying...",
       resume: "Building resume...",
@@ -176,7 +211,15 @@ export function JobsList({
         nextLabel =
           application?.application_status === "manual_assist"
             ? "Manual assist required"
-            : "Application completed";
+            : application?.application_status === "failed"
+              ? "Job unavailable. Archived."
+              : "Application completed";
+        if (application?.application_status === "applied") {
+          setAppliedJobs((current) => ({ ...current, [attempt.job_id]: true }));
+        }
+        if (application?.application_status === "failed") {
+          setArchivedJobs((current) => ({ ...current, [attempt.job_id]: true }));
+        }
       } else if (attempt.status === "failed") {
         nextLabel = "Apply failed";
       }
@@ -210,6 +253,9 @@ export function JobsList({
         const checked = selected.includes(job.id);
         const status = actionStatus[job.id];
         const busy = busyActions[job.id] ?? {};
+        const isApplied = Boolean(appliedJobs[job.id]);
+        const isArchived = !job.is_active || Boolean(archivedJobs[job.id]);
+
         return (
           <article
             key={job.id}
@@ -220,6 +266,7 @@ export function JobsList({
                 type="checkbox"
                 className="mt-1 h-4 w-4 rounded border-slate-300"
                 checked={checked}
+                disabled={isApplied || isArchived}
                 onChange={(event) => {
                   setSelected((current) =>
                     event.target.checked
@@ -243,7 +290,21 @@ export function JobsList({
                       </p>
                     )}
                   </div>
-                  <div className="flex gap-2 text-xs font-medium">
+                  <div className="flex flex-wrap gap-2 text-xs font-medium">
+                    <span
+                      className={`rounded-full px-3 py-1 ${
+                        isArchived
+                          ? "bg-amber-100 text-amber-800"
+                          : "bg-emerald-50 text-emerald-700"
+                      }`}
+                    >
+                      {isArchived ? "archived" : "active"}
+                    </span>
+                    {isApplied && (
+                      <span className="rounded-full bg-slate-900 px-3 py-1 text-white">
+                        applied
+                      </span>
+                    )}
                     <span className="rounded-full bg-teal-50 px-3 py-1 text-teal-700">
                       {job.work_mode}
                     </span>
@@ -256,24 +317,30 @@ export function JobsList({
                   <button
                     type="button"
                     onClick={() => runJobAction(job.id, "apply")}
-                    disabled={busy.apply === "busy"}
-                    className="rounded-xl bg-slate-950 px-3 py-2 text-sm font-medium text-white"
+                    disabled={busy.apply === "busy" || isApplied || isArchived}
+                    className="rounded-xl bg-slate-950 px-3 py-2 text-sm font-medium text-white disabled:bg-slate-300"
                   >
-                    {busy.apply === "busy" ? "Starting..." : "Apply"}
+                    {busy.apply === "busy"
+                      ? "Starting..."
+                      : isApplied
+                        ? "Applied"
+                        : isArchived
+                          ? "Archived"
+                          : "Apply"}
                   </button>
                   <button
                     type="button"
                     onClick={() => runJobAction(job.id, "resume")}
-                    disabled={busy.resume === "busy"}
-                    className="rounded-xl bg-teal-700 px-3 py-2 text-sm font-medium text-white"
+                    disabled={busy.resume === "busy" || isArchived}
+                    className="rounded-xl bg-teal-700 px-3 py-2 text-sm font-medium text-white disabled:bg-teal-300"
                   >
                     {busy.resume === "busy" ? "Starting..." : "Build Resume"}
                   </button>
                   <button
                     type="button"
                     onClick={() => runJobAction(job.id, "cover-letter")}
-                    disabled={busy.coverLetter === "busy"}
-                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900"
+                    disabled={busy.coverLetter === "busy" || isArchived}
+                    className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-900 disabled:bg-slate-100"
                   >
                     {busy.coverLetter === "busy" ? "Starting..." : "Build Cover Letter"}
                   </button>

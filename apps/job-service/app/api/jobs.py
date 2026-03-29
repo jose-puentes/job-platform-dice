@@ -64,3 +64,7 @@ async def get_job_filters(db: Session = Depends(get_db)) -> JobFilterMetadata:
 async def get_job(job_id: UUID, db: Session = Depends(get_db)) -> JobDetail:
     return JobCatalogService(db).get_job(job_id)
 
+
+@router.patch("/{job_id}/archive", response_model=JobDetail)
+async def archive_job(job_id: UUID, db: Session = Depends(get_db)) -> JobDetail:
+    return JobCatalogService(db).archive_job(job_id)

@@ -28,6 +28,11 @@ class ApplicationRepository:
             select(ApplyAttempt).where(ApplyAttempt.apply_run_id == run_id, ApplyAttempt.job_id == job_id)
         ).scalar_one_or_none()
 
+    def list_attempts_for_run(self, run_id: UUID) -> list[ApplyAttempt]:
+        return self.db.execute(
+            select(ApplyAttempt).where(ApplyAttempt.apply_run_id == run_id).order_by(ApplyAttempt.created_at.asc())
+        ).scalars().all()
+
     def list_runs(self) -> list[ApplyRun]:
         return self.db.execute(select(ApplyRun).order_by(desc(ApplyRun.created_at))).scalars().all()
 
@@ -39,6 +44,14 @@ class ApplicationRepository:
             select(Application).where(Application.id == application_id)
         ).scalar_one_or_none()
 
+    def get_latest_application_for_job(self, job_id: UUID) -> Application | None:
+        return self.db.execute(
+            select(Application)
+            .where(Application.job_id == job_id)
+            .order_by(desc(Application.created_at))
+            .limit(1)
+        ).scalars().first()
+
     def add_application(self, application: Application) -> Application:
         self.db.add(application)
         self.db.flush()
@@ -48,4 +61,3 @@ class ApplicationRepository:
         self.db.add(event)
         self.db.flush()
         return event
-

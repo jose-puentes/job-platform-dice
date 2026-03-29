@@ -82,7 +82,7 @@ class JobRepository:
         stmt = stmt.join(Company, Job.company_id == Company.id).join(JobSource, Job.source_id == JobSource.id)
         count_stmt = count_stmt.join(Company, Job.company_id == Company.id).join(JobSource, Job.source_id == JobSource.id)
 
-        filters = [Job.is_active.is_(True)]
+        filters = []
         if params.q:
             like = f"%{params.q}%"
             filters.append(
@@ -180,6 +180,13 @@ class JobRepository:
             employment_types=[employment_type.value for employment_type in employment_types],
         )
 
+    def archive_job(self, job_id: str) -> Job | None:
+        job = self.get_job(job_id)
+        if not job:
+            return None
+        job.is_active = False
+        return job
+
     @staticmethod
     def _normalize_text(value: str) -> str:
         return " ".join(value.lower().split())
@@ -194,4 +201,3 @@ class JobRepository:
             ]
         )
         return hashlib.sha256(basis.encode("utf-8")).hexdigest()
-

@@ -47,6 +47,11 @@ async def get_document(document_id: UUID, db: Session = Depends(get_db)) -> Docu
     return DocumentService(db).get_document(document_id)
 
 
+@router.delete("/internal/documents/{document_id}", status_code=204)
+async def delete_document(document_id: UUID, db: Session = Depends(get_db)) -> None:
+    DocumentService(db).delete_document(document_id)
+
+
 @router.get("/internal/documents/{document_id}/preview")
 async def preview_document(document_id: UUID, db: Session = Depends(get_db)) -> HTMLResponse:
     html = DocumentService(db).build_document_preview(document_id)

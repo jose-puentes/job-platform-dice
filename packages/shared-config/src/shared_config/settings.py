@@ -25,6 +25,9 @@ class ServiceSettings(BaseSettings):
     dice_login_url: str = Field(default="https://www.dice.com/dashboard/login", alias="DICE_LOGIN_URL")
     browser_headless: bool = Field(default=True, alias="BROWSER_HEADLESS")
     apply_browser_timeout_ms: int = Field(default=60000, alias="APPLY_BROWSER_TIMEOUT_MS")
+    two_captcha_api_key: str | None = Field(default=None, alias="TWO_CAPTCHA_API_KEY")
+    two_captcha_poll_interval_ms: int = Field(default=5000, alias="TWO_CAPTCHA_POLL_INTERVAL_MS")
+    two_captcha_timeout_ms: int = Field(default=180000, alias="TWO_CAPTCHA_TIMEOUT_MS")
 
     @field_validator("cors_origins", mode="before")
     @classmethod

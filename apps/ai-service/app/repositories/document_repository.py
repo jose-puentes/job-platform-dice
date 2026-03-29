@@ -64,6 +64,9 @@ class DocumentRepository:
             select(GeneratedDocument).where(GeneratedDocument.id == document_id)
         ).scalar_one_or_none()
 
+    def delete_document(self, document: GeneratedDocument) -> None:
+        self.db.delete(document)
+
     def get_latest_completed_document(
         self, job_id: UUID, document_type: DocumentType
     ) -> GeneratedDocument | None:

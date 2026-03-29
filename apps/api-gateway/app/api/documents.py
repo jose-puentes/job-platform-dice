@@ -52,6 +52,13 @@ async def get_document(document_id: UUID) -> DocumentResponse:
         return DocumentResponse.model_validate(response.json())
 
 
+@router.delete("/api/v1/documents/{document_id}", status_code=204)
+async def delete_document(document_id: UUID) -> None:
+    async with ai_service_client() as client:
+        response = await client.delete(f"/internal/documents/{document_id}")
+        response.raise_for_status()
+
+
 @router.get("/api/v1/documents/{document_id}/preview")
 async def preview_document(document_id: UUID) -> Response:
     async with ai_service_client() as client:

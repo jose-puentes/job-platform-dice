@@ -1,6 +1,7 @@
 from datetime import UTC, datetime
 from uuid import UUID
 
+import httpx
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
@@ -18,13 +19,20 @@ from app.models import (
 )
 from app.repositories.application_repository import ApplicationRepository
 from app.services.apply_event_service import event_service
-from app.services.dice_apply import ApplyAutomationResult, ManualAssistRequired, execute_dice_internal_apply
+from app.services.dice_apply import (
+    ApplyAutomationResult,
+    DiceAutomationSession,
+    JobNoLongerAvailable,
+    ManualAssistRequired,
+    execute_dice_internal_apply,
+)
 from app.services.strategies import determine_apply_strategy
 from shared_http import build_async_client
 from shared_types import (
     ApplicationListResponse,
     ApplicationResponse,
     ApplyAttemptPayload,
+    ApplyRunExecutionPayload,
     ApplyRunResponse,
     CreateBatchApplyRequest,
     CreateSingleApplyRequest,
@@ -64,11 +72,58 @@ class ApplicationService:
             raise HTTPException(status_code=404, detail="Application not found")
         return self._to_application_response(application)
 
+    def get_latest_application_for_job(self, job_id: UUID) -> ApplicationResponse:
+        application = self.repository.get_latest_application_for_job(job_id)
+        if not application:
+            raise HTTPException(status_code=404, detail="Application not found")
+        return self._to_application_response(application)
+
     async def execute_attempt(self, payload: ApplyAttemptPayload) -> ApplicationResponse:
+        return await self._execute_attempt_internal(payload)
+
+    async def execute_run(self, payload: ApplyRunExecutionPayload) -> ApplyRunResponse:
+        run = self.repository.get_run(payload.apply_run_id)
+        if not run:
+            raise HTTPException(status_code=404, detail="Apply run not found")
+
+        attempts = self.repository.list_attempts_for_run(payload.apply_run_id)
+        dice_session: DiceAutomationSession | None = None
+
+        try:
+            for attempt in attempts:
+                if attempt.status == ApplyAttemptStatus.COMPLETED:
+                    continue
+                attempt_payload = ApplyAttemptPayload(
+                    apply_run_id=payload.apply_run_id,
+                    job_id=attempt.job_id,
+                    triggered_by=payload.triggered_by,
+                )
+                if dice_session is None:
+                    dice_session = await self._maybe_start_batch_dice_session(run, attempt, attempt_payload)
+                await self._execute_attempt_internal(attempt_payload, dice_session=dice_session)
+        finally:
+            if dice_session is not None:
+                await dice_session.__aexit__(None, None, None)
+
+        refreshed_run = self.repository.get_run(payload.apply_run_id)
+        if not refreshed_run:
+            raise HTTPException(status_code=404, detail="Apply run not found after execution")
+        return self._to_run_response(refreshed_run)
+
+    async def _execute_attempt_internal(
+        self,
+        payload: ApplyAttemptPayload,
+        *,
+        dice_session: DiceAutomationSession | None = None,
+    ) -> ApplicationResponse:
         run = self.repository.get_run(payload.apply_run_id)
         attempt = self.repository.get_attempt(payload.apply_run_id, payload.job_id)
         if not run or not attempt:
             raise HTTPException(status_code=404, detail="Apply attempt not found")
+
+        existing_application = self.repository.get_latest_application_for_job(payload.job_id)
+        if existing_application and existing_application.application_status == ApplicationStatus.APPLIED:
+            raise HTTPException(status_code=409, detail="Job has already been applied to and cannot be applied again")
 
         attempt.status = ApplyAttemptStatus.RUNNING
         if not run.started_at:
@@ -80,9 +135,17 @@ class ApplicationService:
 
         try:
             async with build_async_client(settings.job_service_url) as client:
-                job_response = await client.get(f"/internal/jobs/{payload.job_id}")
-                job_response.raise_for_status()
-                job = job_response.json()
+                try:
+                    job_response = await client.get(f"/internal/jobs/{payload.job_id}")
+                    job_response.raise_for_status()
+                    job = job_response.json()
+                except httpx.HTTPStatusError as exc:
+                    if exc.response.status_code == 404:
+                        raise JobNoLongerAvailable(
+                            "This job is no longer available in the catalog and cannot be applied to.",
+                            external_reference=str(payload.job_id),
+                        ) from exc
+                    raise
             await self._log_attempt_step(run, attempt, "apply.job_loaded", "Loaded job details.", {"job_url": job.get("job_url")})
 
             strategy = determine_apply_strategy(job)
@@ -138,6 +201,7 @@ class ApplicationService:
                 cover_doc=cover_doc,
                 run=run,
                 attempt=attempt,
+                dice_session=dice_session,
             )
 
             application = self.repository.add_application(
@@ -164,6 +228,43 @@ class ApplicationService:
                 )
             )
 
+            attempt.status = ApplyAttemptStatus.COMPLETED
+            run.completed_jobs += 1
+            if run.completed_jobs == run.total_jobs:
+                run.status = ApplyRunStatus.COMPLETED
+                run.finished_at = datetime.now(UTC)
+            self.db.commit()
+            event_service.publish_updated(run, attempt, application=application)
+            return self._to_application_response(application)
+        except JobNoLongerAvailable as exc:
+            await self._archive_job(payload.job_id)
+            await self._log_attempt_step(
+                run,
+                attempt,
+                "apply.job_unavailable",
+                str(exc),
+                {"external_reference": exc.external_reference},
+            )
+            application = self.repository.add_application(
+                Application(
+                    job_id=payload.job_id,
+                    application_status=ApplicationStatus.FAILED,
+                    apply_strategy=attempt.strategy,
+                    resume_document_id=UUID(resume_doc["id"]) if resume_doc else None,
+                    cover_letter_document_id=UUID(cover_doc["id"]) if cover_doc else None,
+                    applied_at=datetime.now(UTC),
+                    external_reference=exc.external_reference or job.get("job_url"),
+                )
+            )
+            self._persist_attempt_logs_as_events(application.id, attempt)
+            self.repository.add_event(
+                ApplicationEvent(
+                    application_id=application.id,
+                    event_type="apply_job_unavailable",
+                    message=str(exc),
+                    metadata_json={"attempt_logs": attempt.metadata_json.get("logs", [])},
+                )
+            )
             attempt.status = ApplyAttemptStatus.COMPLETED
             run.completed_jobs += 1
             if run.completed_jobs == run.total_jobs:
@@ -228,8 +329,18 @@ class ApplicationService:
         cover_doc: dict | None,
         run: ApplyRun,
         attempt: ApplyAttempt,
+        dice_session: DiceAutomationSession | None = None,
     ) -> ApplyAutomationResult:
         if strategy == ApplyStrategy.EASY_APPLY and (job.get("source") or "").lower() == "dice":
+            if dice_session is not None:
+                return await dice_session.execute_apply(
+                    job=job,
+                    resume_path=resume_doc["file_path"] if resume_doc else None,
+                    cover_letter_path=cover_doc["file_path"] if cover_doc else None,
+                    log_step=lambda event_type, message, metadata=None: self._log_attempt_step(
+                        run, attempt, event_type, message, metadata
+                    ),
+                )
             return await execute_dice_internal_apply(
                 job=job,
                 resume_path=resume_doc["file_path"] if resume_doc else None,
@@ -297,6 +408,11 @@ class ApplicationService:
             )
 
     def _create_run(self, job_ids: list[UUID], triggered_by: str, mode: ApplyMode) -> ApplyRunResponse:
+        if mode == ApplyMode.SINGLE and job_ids:
+            existing_application = self.repository.get_latest_application_for_job(job_ids[0])
+            if existing_application and existing_application.application_status == ApplicationStatus.APPLIED:
+                raise HTTPException(status_code=409, detail="Job has already been applied to and cannot be applied again")
+
         run = self.repository.add_run(
             ApplyRun(
                 triggered_by=triggered_by,
@@ -320,18 +436,70 @@ class ApplicationService:
         for attempt in attempts:
             event_service.publish_created(run, attempt)
 
-        for attempt in attempts:
+        if mode == ApplyMode.BATCH:
             celery_app.send_task(
-                "worker.execute_apply_task",
+                "worker.execute_apply_run",
                 kwargs={
-                    "payload": ApplyAttemptPayload(
-                        apply_run_id=run.id, job_id=attempt.job_id, triggered_by=triggered_by
+                    "payload": ApplyRunExecutionPayload(
+                        apply_run_id=run.id,
+                        triggered_by=triggered_by,
                     ).model_dump(mode="json")
                 },
-                queue="apply.single" if mode == ApplyMode.SINGLE else "apply.batch",
+                queue="apply.batch",
             )
+        else:
+            for attempt in attempts:
+                celery_app.send_task(
+                    "worker.execute_apply_task",
+                    kwargs={
+                        "payload": ApplyAttemptPayload(
+                            apply_run_id=run.id, job_id=attempt.job_id, triggered_by=triggered_by
+                        ).model_dump(mode="json")
+                    },
+                    queue="apply.single",
+                )
 
         return self._to_run_response(run)
+
+    async def _maybe_start_batch_dice_session(
+        self,
+        run: ApplyRun,
+        attempt: ApplyAttempt,
+        payload: ApplyAttemptPayload,
+    ) -> DiceAutomationSession | None:
+        async with build_async_client(settings.job_service_url) as client:
+            job_response = await client.get(f"/internal/jobs/{payload.job_id}")
+            job_response.raise_for_status()
+            job = job_response.json()
+
+        strategy = determine_apply_strategy(job)
+        attempt.strategy = strategy
+        self.db.commit()
+        event_service.publish_updated(run, attempt)
+
+        if strategy != ApplyStrategy.EASY_APPLY or (job.get("source") or "").lower() != "dice":
+            return None
+
+        session = DiceAutomationSession()
+        await session.__aenter__()
+        await self._log_attempt_step(
+            run,
+            attempt,
+            "dice.batch_session",
+            "Opening a shared Dice browser session for sequential batch apply.",
+        )
+        await session.ensure_logged_in(
+            lambda event_type, message, metadata=None: self._log_attempt_step(run, attempt, event_type, message, metadata),
+            force=True,
+        )
+        return session
+
+    async def _archive_job(self, job_id: UUID) -> None:
+        async with build_async_client(settings.job_service_url) as client:
+            response = await client.patch(f"/internal/jobs/{job_id}/archive")
+            if response.status_code == 404:
+                return
+            response.raise_for_status()
 
     @staticmethod
     def _to_run_response(run: ApplyRun) -> ApplyRunResponse:

@@ -179,6 +179,18 @@ class DocumentService:
             raise HTTPException(status_code=404, detail="Document not found")
         return self._to_document_response(document)
 
+    def delete_document(self, document_id: UUID) -> None:
+        document = self.repository.get_document(document_id)
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        file_path = Path(document.file_path)
+        if file_path.exists():
+            file_path.unlink()
+
+        self.repository.delete_document(document)
+        self.db.commit()
+
     def build_document_preview(self, document_id: UUID) -> str:
         document = self.repository.get_document(document_id)
         if not document:

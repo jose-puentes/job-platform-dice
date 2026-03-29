@@ -1,6 +1,7 @@
 from uuid import UUID
 
-from fastapi import APIRouter, Query
+import httpx
+from fastapi import APIRouter, HTTPException, Query
 
 from app.clients.services import job_service_client
 from shared_types import JobDetail, JobFilterMetadata, PaginatedJobsResponse
@@ -54,7 +55,9 @@ async def get_job_filters() -> JobFilterMetadata:
 @router.get("/{job_id}", response_model=JobDetail)
 async def get_job(job_id: UUID) -> JobDetail:
     async with job_service_client() as client:
-        response = await client.get(f"/internal/jobs/{job_id}")
-        response.raise_for_status()
+        try:
+            response = await client.get(f"/internal/jobs/{job_id}")
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text) from exc
         return JobDetail.model_validate(response.json())
-

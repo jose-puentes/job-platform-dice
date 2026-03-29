@@ -9,6 +9,7 @@ from shared_types import (
     ApplicationListResponse,
     ApplicationResponse,
     ApplyAttemptPayload,
+    ApplyRunExecutionPayload,
     ApplyRunResponse,
     CreateBatchApplyRequest,
     CreateSingleApplyRequest,
@@ -38,6 +39,13 @@ async def execute_apply_attempt(
     return await ApplicationService(db).execute_attempt(request)
 
 
+@router.post("/internal/apply-runs/execute", response_model=ApplyRunResponse)
+async def execute_apply_run(
+    request: ApplyRunExecutionPayload, db: Session = Depends(get_db)
+) -> ApplyRunResponse:
+    return await ApplicationService(db).execute_run(request)
+
+
 @router.get("/internal/apply-runs", response_model=list[ApplyRunResponse])
 async def list_apply_runs(db: Session = Depends(get_db)) -> list[ApplyRunResponse]:
     return ApplicationService(db).list_runs()
@@ -57,3 +65,7 @@ async def list_applications(db: Session = Depends(get_db)) -> ApplicationListRes
 async def get_application(application_id: UUID, db: Session = Depends(get_db)) -> ApplicationResponse:
     return ApplicationService(db).get_application(application_id)
 
+
+@router.get("/internal/jobs/{job_id}/application", response_model=ApplicationResponse)
+async def get_latest_application_for_job(job_id: UUID, db: Session = Depends(get_db)) -> ApplicationResponse:
+    return ApplicationService(db).get_latest_application_for_job(job_id)

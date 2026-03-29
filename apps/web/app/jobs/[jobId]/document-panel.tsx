@@ -17,10 +17,13 @@ type GenerationRunItem = {
 
 export function DocumentPanel({
   documents,
+  onDeleted,
 }: {
   documents: { items: DocumentItem[]; generation_runs: GenerationRunItem[] };
+  onDeleted?: (document: DocumentItem) => void;
 }) {
   const [previewDocumentId, setPreviewDocumentId] = useState<string | null>(null);
+  const [deletingDocumentId, setDeletingDocumentId] = useState<string | null>(null);
   const latestDocuments = new Map<string, DocumentItem>();
   const latestRuns = new Map<string, GenerationRunItem>();
 
@@ -41,6 +44,22 @@ export function DocumentPanel({
     return !matchingDocument || run.status !== "completed";
   });
   const visibleDocuments = Array.from(latestDocuments.values());
+
+  async function removeDocument(document: DocumentItem) {
+    setDeletingDocumentId(document.id);
+    try {
+      const response = await fetch(`/api/documents/${document.id}`, { method: "DELETE" });
+      if (!response.ok) {
+        throw new Error("Failed to delete document");
+      }
+      onDeleted?.(document);
+      if (previewDocumentId === document.id) {
+        setPreviewDocumentId(null);
+      }
+    } finally {
+      setDeletingDocumentId(null);
+    }
+  }
 
   return (
     <div className="mt-4 space-y-3 text-sm text-slate-600">
@@ -66,9 +85,19 @@ export function DocumentPanel({
             <div className="font-medium text-slate-900">
               {document.document_type.replaceAll("_", " ")}
             </div>
-            <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-700">
-              {document.generation_status}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs text-emerald-700">
+                {document.generation_status}
+              </span>
+              <button
+                type="button"
+                onClick={() => removeDocument(document)}
+                disabled={deletingDocumentId === document.id}
+                className="text-xs text-rose-600 underline disabled:text-rose-300"
+              >
+                {deletingDocumentId === document.id ? "Removing..." : "Remove"}
+              </button>
+            </div>
           </div>
           <div className="mt-2 flex gap-3 text-sm">
             <button
